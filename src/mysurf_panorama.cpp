@@ -178,7 +178,17 @@ void get_histimage(Mat image, Mat *hist_image) {
 	}
 
 }
-
+/*
+ *  透視投影変換後の画像をパノラマ平面にマスクを用いて
+ *  上書きせずに未投影の領域のみに投影する関数
+ *
+ * @Param  src パノラマ画像に投影したい画像
+ * @Param  dst パノラマ画像
+ * @Param mask 投影済みの領域を表したマスク画像
+ * @Param  roi 投影したい画像の領域を表した画像
+ *
+ *  （＊maskは処理後に更新されて返される）
+ */
 void make_pano(Mat src, Mat dst, Mat mask, Mat roi) {
 
 	//サイズの一致を確認
@@ -237,10 +247,7 @@ int main(int argc, char** argv) {
 	Mat h_base = cv::Mat::eye(3, 3, CV_64FC1); // センターサークル画像へのホモグラフィ−
 	//	vector<int> ptpairs;
 	vector<Point2f> pt1, pt2; // 画像対における特徴点の集合
-	Mat _pt1, _pt2; // 特徴点の座標の行列
 	int n, w, h;
-	Vec3b cal;
-	Vec3b tmpc;
 
 	// パノラマ平面の
 	int roll = 0;
@@ -292,9 +299,6 @@ int main(int argc, char** argv) {
 	// 合成開始フレームまでスキップ
 	cap.set(CV_CAP_PROP_POS_FRAMES, skip);
 
-	//	Mat imagec ;
-	//	Mat objectc;
-
 	// 動画から取得した画像対の格納先
 	Mat image;
 	Mat object;
@@ -313,6 +317,8 @@ int main(int argc, char** argv) {
 
 	// SIFT 
 	//	cv::SIFT feature;
+	//Surf
+	SURF feature(5, 3, 4, true);
 	feature.getParams(v_log_str);
 
 	/*logging*/
@@ -335,9 +341,7 @@ int main(int argc, char** argv) {
 	for (int ii = 0; ii < v_log_str.size(); ii++)
 		log << v_log_str[ii] << " " << feature.getDouble(v_log_str[ii]) << endl;
 
-	//Surf
-	SURF feature(5, 3, 4, true);
-	feature.getParams(log_str);
+
 	log << "<Algorithm> " << endl << "SURF" << endl;
 	log << "<Algorithm Param>" << endl;
 	for (int ii = 0; ii < log_str.size(); ii++)
@@ -350,8 +354,6 @@ int main(int argc, char** argv) {
 	//OrbDescriptorExtractor extractor;
 
 	// 特徴点の検出と特徴量の記述
-	//	detector.detect(image, imageKeypoints);
-	//	extractor.compute(image, imageKeypoints, imageDescriptors);
 	feature(gray_image, Mat(), imageKeypoints, imageDescriptors);
 
 	// ホモグラフィ−行列による変換後の画像格納先
@@ -450,8 +452,6 @@ int main(int argc, char** argv) {
 		 */
 		cvtColor(object, gray_image, CV_RGB2GRAY);
 		feature(gray_image, Mat(), objectKeypoints, objectDescriptors);
-		//		detector.detect(object, objectKeypoints);
-		//		extractor.compute(object, objectKeypoints, objectDescriptors);
 
 		cv::Laplacian(object, tmp_img, CV_32F, 1, 1);
 		cv::convertScaleAbs(tmp_img, sobel_img, 1, 0);
@@ -615,26 +615,7 @@ int main(int argc, char** argv) {
 		Mat h2 = h_base;
 		warpPerspective(matrixB, matrixA, h2, matrixB.size(), CV_INTER_LINEAR
 				| CV_WARP_FILL_OUTLIERS);
-		/*
-		 for (int i = 0; i < w; i++) {
-		 for (int j = 0; j < h; j++) {
-		 cal = transform_image.at<Vec3b> (j, i);
-		 //               if(cal.val[0]!=0||cal.val[1]!=0||cal.val[2]!=0){
-		 tmpc = transform_image2.at<Vec3b> (j, i);
-		 if (mask.at<unsigned char> (j, i) == 0) {
-		 //if(tmpc.val[0]==0&&tmpc.val[1]==0&&tmpc.val[2]==0){
-		 tmpc.val[0] = cal.val[0];
-		 tmpc.val[1] = cal.val[1];
-		 tmpc.val[2] = cal.val[2];
-		 if (matrixA.at<unsigned char> (j, i) == 255)
-		 mask.at<unsigned char> (j, i)
-		 = matrixA.at<unsigned char> (j, i);
 
-		 }
-		 transform_image2.at<Vec3b> (j, i) = tmpc;
-		 }
-		 }
-		 */
 		make_pano(transform_image, transform_image2, mask, matrixA);
 		ss << "frame = " << frame_num;
 		putText(transform_image, ss.str(), Point(100, 100),
