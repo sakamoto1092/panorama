@@ -384,8 +384,10 @@ int main(int argc, char** argv) {
 	fscanf(SensorFP, "%s", sensorfileName);
 	fclose(SensorFP);
 
-	center_img = imread(n_center);
-	if(center_img.empty()){
+	if(f_center)
+		center_img = imread(n_center);
+
+	if(f_center && center_img.empty()){
 		cerr << "Cant open center_img " << n_center << endl;
 		f_center = false;
 		//return -1;
@@ -412,8 +414,13 @@ int main(int argc, char** argv) {
 	}else{
 		frame_num = 0;
 	}
-
 	feature = Feature2D::create(algorithm_type);
+	feature->set("extended", 1);
+	feature->set("hessianThreshold",5);
+	feature->set("nOctaveLayers",4);
+	feature->set("nOctaves", 3);
+	feature->set("upright",0);
+
 
 	//	double tt = (double) cvGetTickCount();
 
@@ -485,10 +492,11 @@ int main(int argc, char** argv) {
 				cvSize(w, h), 1);
 
 	// フレームを飛ばす
-	for (int i = 0; i < FRAME_T; i++) {
-		cap >> object;
-		frame_num++;
-	}
+	if(!f_center)
+		for (int i = 0; i < FRAME_T; i++) {
+			cap >> object;
+			frame_num++;
+		}
 
 	// 手ブレ検出用各種変数
 	int img_num = 0;

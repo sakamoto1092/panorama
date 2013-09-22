@@ -21,8 +21,8 @@
 <Algorithm> 
 SURF
 <Algorithm Param>
-extended 0
-hessianThreshold 100
-nOctaveLayers 3
-nOctaves 4
+extended 1
+hessianThreshold 5
+nOctaveLayers 4
+nOctaves 3
 upright 0
