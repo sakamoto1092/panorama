@@ -37,6 +37,7 @@
 <tool id="cdt.managedbuild.tool.gnu.cpp.linker.exe.debug.1146747973" name="GCC C++ Linker" superClass="cdt.managedbuild.tool.gnu.cpp.linker.exe.debug">
 <option id="gnu.cpp.link.option.libs.1997090167" name="ライブラリー (-l)" superClass="gnu.cpp.link.option.libs" valueType="libs">
 <listOptionValue builtIn="false" value="opencv_core"/>
+<listOptionValue builtIn="false" value="boost_program_options"/>
 <listOptionValue builtIn="false" value="opencv_highgui"/>
 <listOptionValue builtIn="false" value="opencv_imgproc"/>
 <listOptionValue builtIn="false" value="opencv_nonfree"/>
@@ -51,9 +52,6 @@
 </tool>
 </toolChain>
 </folderInfo>
-<fileInfo id="cdt.managedbuild.config.gnu.exe.debug.389154597.704009584" name="mysurf_panorama.cpp" rcbsApplicability="disable" resourcePath="src/mysurf_panorama.cpp" toolsToInvoke="cdt.managedbuild.tool.gnu.cpp.compiler.exe.debug.725597262.528422663">
-<tool id="cdt.managedbuild.tool.gnu.cpp.compiler.exe.debug.725597262.528422663" name="GCC C++ Compiler" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.exe.debug.725597262"/>
-</fileInfo>
 <sourceEntries>
 <entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
 <entry excluding="src" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name=""/>
