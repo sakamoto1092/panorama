@@ -1,10 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <projectDescription>
-<<<<<<< HEAD
 	<name>my_panorama</name>
-=======
-	<name>mypnanorama</name>
->>>>>>> 28e95799da9cd48d481efeffdcabfcf44d327f90
 	<comment></comment>
 	<projects>
 	</projects>
@@ -35,11 +31,7 @@
 				</dictionary>
 				<dictionary>
 					<key>org.eclipse.cdt.make.core.buildLocation</key>
-<<<<<<< HEAD
 					<value>${workspace_loc:/my_panorama/Debug}</value>
-=======
-					<value>${workspace_loc:/mypnanorama/Debug}</value>
->>>>>>> 28e95799da9cd48d481efeffdcabfcf44d327f90
 				</dictionary>
 				<dictionary>
 					<key>org.eclipse.cdt.make.core.cleanBuildTarget</key>

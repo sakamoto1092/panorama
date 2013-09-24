@@ -415,7 +415,7 @@ int main(int argc, char** argv) {
 		frame_num = 0;
 	}
 	feature = Feature2D::create(algorithm_type);
-	if(algorithm_type.compare(SURF) ){
+	if(algorithm_type.compare("SURF") == 1 ){
 	feature->set("extended", 1);
 	feature->set("hessianThreshold",5);
 	feature->set("nOctaveLayers",4);
