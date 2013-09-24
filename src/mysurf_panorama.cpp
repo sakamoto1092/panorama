@@ -10,14 +10,16 @@
 #include <iostream>
 #include <vector>
 #include <fstream>
+#include <boost/program_options.hpp>
 
-long FRAME_MAX; // ºÇÂç¥Õ¥ì¡¼¥à¿ô
-#define FRAME_T 9       // ¥Õ¥ì¡¼¥àÈô¤Ğ¤·´Ö³Ö
-#define f_comp 1
-#define f_center 1
-#define f_deblur 1
 using namespace std;
 using namespace cv;
+using boost::program_options::options_description;
+using boost::program_options::value;
+using boost::program_options::variables_map;
+using boost::program_options::store;
+using boost::program_options::parse_command_line;
+using boost::program_options::notify;
 
 // Tilt :
 int SetTiltRotationMatrix(Mat *tiltMatrix, double tilt_deg) {
@@ -126,20 +128,20 @@ double compareSURFDescriptors(const float* d1, const float* d2, double best,
 }
 
 void get_histimage(Mat image, Mat *hist_image) {
-	MatND hist; // ¥Ò¥¹¥È¥°¥é¥à
-	Scalar mean, dev; // Ê¿¶Ñ¤ÈÊ¬»¶¤Î³ÊÇ¼Àè
-	float hrange[] = { 0, 256 }; // ¥Ò¥¹¥È¥°¥é¥à¤Îµ±ÅÙÃÍ¥ì¥ó¥¸
-	const float* range[] = { hrange }; // ¥Á¥ã¥Í¥ë¤´¤È¤Î¥Ò¥¹¥È¥°¥é¥à¤Îµ±ÅÙÃÍ¥ì¥ó¥¸¡Ê¥°¥ì¡¼¥¹¥±¡¼¥ë¤Ê¤Î¤ÇÍ×ÁÇ¿ô¤Ï£±¡Ë
-	int binNum = 126; // ¥Ò¥¹¥È¥°¥é¥à¤ÎÎÌ»Ò²½¤ÎÃÍ
-	int histSize[] = { binNum }; // ¥Á¥ã¥Í¥ë¤´¤È¤Î¥Ò¥¹¥È¥°¥é¥à¤ÎÎÌ»Ò²½¤ÎÃÍ
-	int channels[] = { 0 }; // ¥Ò¥¹¥È¥°¥é¥à¤òµá¤á¤ë¥Á¥ã¥Í¥ë»ØÄê
-	int dims = 1; // µá¤á¤ë¥Ò¥¹¥È¥°¥é¥à¤Î¿ô
+	MatND hist; // ãƒ’ã‚¹ãƒˆã‚°ãƒ©ãƒ 
+	Scalar mean, dev; // å¹³å‡ã¨åˆ†æ•£ã®æ ¼ç´å…ˆ
+	float hrange[] = { 0, 256 }; // ãƒ’ã‚¹ãƒˆã‚°ãƒ©ãƒ ã®è¼åº¦å€¤ãƒ¬ãƒ³ã‚¸
+	const float* range[] = { hrange }; // ãƒãƒ£ãƒãƒ«ã”ã¨ã®ãƒ’ã‚¹ãƒˆã‚°ãƒ©ãƒ ã®è¼åº¦å€¤ãƒ¬ãƒ³ã‚¸ï¼ˆã‚°ãƒ¬ãƒ¼ã‚¹ã‚±ãƒ¼ãƒ«ãªã®ã§è¦ç´ æ•°ã¯ï¼‘ï¼‰
+	int binNum = 126; // ãƒ’ã‚¹ãƒˆã‚°ãƒ©ãƒ ã®é‡å­åŒ–ã®å€¤
+	int histSize[] = { binNum }; // ãƒãƒ£ãƒãƒ«ã”ã¨ã®ãƒ’ã‚¹ãƒˆã‚°ãƒ©ãƒ ã®é‡å­åŒ–ã®å€¤
+	int channels[] = { 0 }; // ãƒ’ã‚¹ãƒˆã‚°ãƒ©ãƒ ã‚’æ±‚ã‚ã‚‹ãƒãƒ£ãƒãƒ«æŒ‡å®š
+	int dims = 1; // æ±‚ã‚ã‚‹ãƒ’ã‚¹ãƒˆã‚°ãƒ©ãƒ ã®æ•°
 
 
-	float max_dev = FLT_MIN, min_dev = FLT_MAX; // ¥¨¥Ã¥¸²èÁü¤Ë¤ª¤±¤ë¥Ò¥¹¥È¥°¥é¥à¤ÎÊ¬»¶¤Îmin max
-	float max_mean = FLT_MIN, min_mean = FLT_MAX; // ¥¨¥Ã¥¸²èÁü¤Ë¤ª¤±¤ë¥Ò¥¹¥È¥°¥é¥à¤ÎÊ¿¶Ñ¤Îmin max
+	float max_dev = FLT_MIN, min_dev = FLT_MAX; // ã‚¨ãƒƒã‚¸ç”»åƒã«ãŠã‘ã‚‹ãƒ’ã‚¹ãƒˆã‚°ãƒ©ãƒ ã®åˆ†æ•£ã®min max
+	float max_mean = FLT_MIN, min_mean = FLT_MAX; // ã‚¨ãƒƒã‚¸ç”»åƒã«ãŠã‘ã‚‹ãƒ’ã‚¹ãƒˆã‚°ãƒ©ãƒ ã®å¹³å‡ã®min max
 	float sum_mean = 0.0;
-	Mat count(10, 10, CV_32F, cv::Scalar(0)); // ¥¨¥Ã¥¸¤Î¿ô¤ò³ÊÇ¼¤¹¤ë¥«¥¦¥ó¥¿
+	Mat count(10, 10, CV_32F, cv::Scalar(0)); // ã‚¨ãƒƒã‚¸ã®æ•°ã‚’æ ¼ç´ã™ã‚‹ã‚«ã‚¦ãƒ³ã‚¿
 	for (int i = 0; i < 10; i++) {
 		for (int j = 0; j < 10; j++) {
 			double max_value;
@@ -179,19 +181,19 @@ void get_histimage(Mat image, Mat *hist_image) {
 
 }
 /*
- *  Æ©»ëÅê±ÆÊÑ´¹¸å¤Î²èÁü¤ò¥Ñ¥Î¥é¥ŞÊ¿ÌÌ¤Ë¥Ş¥¹¥¯¤òÍÑ¤¤¤Æ
- *  ¾å½ñ¤­¤»¤º¤ËÌ¤Åê±Æ¤ÎÎÎ°è¤Î¤ß¤ËÅê±Æ¤¹¤ë´Ø¿ô
+ *  é€è¦–æŠ•å½±å¤‰æ›å¾Œã®ç”»åƒã‚’ãƒ‘ãƒãƒ©ãƒå¹³é¢ã«ãƒã‚¹ã‚¯ã‚’ç”¨ã„ã¦
+ *  ä¸Šæ›¸ãã›ãšã«æœªæŠ•å½±ã®é ˜åŸŸã®ã¿ã«æŠ•å½±ã™ã‚‹é–¢æ•°
  *
- * @Param  src ¥Ñ¥Î¥é¥Ş²èÁü¤ËÅê±Æ¤·¤¿¤¤²èÁü
- * @Param  dst ¥Ñ¥Î¥é¥Ş²èÁü
- * @Param mask Åê±ÆºÑ¤ß¤ÎÎÎ°è¤òÉ½¤·¤¿¥Ş¥¹¥¯²èÁü
- * @Param  roi Åê±Æ¤·¤¿¤¤²èÁü¤ÎÎÎ°è¤òÉ½¤·¤¿²èÁü
+ * @Param  src ãƒ‘ãƒãƒ©ãƒç”»åƒã«æŠ•å½±ã—ãŸã„ç”»åƒ
+ * @Param  dst ãƒ‘ãƒãƒ©ãƒç”»åƒ
+ * @Param mask æŠ•å½±æ¸ˆã¿ã®é ˜åŸŸã‚’è¡¨ã—ãŸãƒã‚¹ã‚¯ç”»åƒ
+ * @Param  roi æŠ•å½±ã—ãŸã„ç”»åƒã®é ˜åŸŸã‚’è¡¨ã—ãŸç”»åƒ
  *
- *  ¡Ê¡ömask¤Ï½èÍı¸å¤Ë¹¹¿·¤µ¤ì¤ÆÊÖ¤µ¤ì¤ë¡Ë
+ *  ï¼ˆï¼Šmaskã¯å‡¦ç†å¾Œã«æ›´æ–°ã•ã‚Œã¦è¿”ã•ã‚Œã‚‹ï¼‰
  */
 void make_pano(Mat src, Mat dst, Mat mask, Mat roi) {
 
-	//¥µ¥¤¥º¤Î°ìÃ×¤ò³ÎÇ§
+	//ã‚µã‚¤ã‚ºã®ä¸€è‡´ã‚’ç¢ºèª
 	if (src.cols == dst.cols && src.rows == dst.rows) {
 		int h = src.rows;
 		int w = src.cols;
@@ -211,45 +213,85 @@ void make_pano(Mat src, Mat dst, Mat mask, Mat roi) {
 
 int main(int argc, char** argv) {
 
-	if (argc != 6) {
-		cout << "argument error\n " << argv[0]
-				<< "cam_data center start end blur" << endl;
-		return -1;
-	}
+	VideoWriter VideoWriter; // ãƒ‘ãƒãƒ©ãƒå‹•ç”»
+	VideoCapture cap; 		// ãƒ“ãƒ‡ã‚ªãƒ•ã‚¡ã‚¤ãƒ«
 
-	VideoCapture cap; // ¥Ó¥Ç¥ª¥Õ¥¡¥¤¥ëÆÉ¤ß¹ş¤ß
-	VideoWriter VideoWriter; // ¥Ñ¥Î¥é¥ŞÆ°²è
-	Mat center_img = imread(argv[2]); // ¥»¥ó¥¿¡¼¥µ¡¼¥¯¥ë²èÁüÆÉ¤ß¹ş¤ß
-	int skip = atoi(argv[3]); // ¹çÀ®³«»Ï¥Õ¥ì¡¼¥àÈÖ¹æ
-	int end = atoi(argv[4]); // ¹çÀ®½ªÎ»¥Õ¥ì¡¼¥àÈÖ¹æ
-	int frame_num = skip + 1; // ¸½ºß¤Î¥Õ¥ì¡¼¥à°ÌÃÖ
-	int blur = atoi(argv[5]); // ¥Ö¥ì¤Î¤·¤­¤¤ÃÍ
+	// å‹•ç”»ã‹ã‚‰å–å¾—ã—ãŸå„ç¨®ç”»åƒã®æ ¼ç´å…ˆ
+	Mat image;					// æŠ•å½±å…ˆã®ç”»åƒ
+	Mat object;				// å¤‰æ›å…ƒã®ç”»åƒ
+	Mat gray_image;			// å¤‰æ›å…ƒã®å¾®åˆ†ç”»åƒ
+	Mat center_img; 			// ã‚»ãƒ³ã‚¿ãƒ¼ã‚µãƒ¼ã‚¯ãƒ«ç”»åƒ
 
-	//	char object_filename[128];
-	//	char scene_filename[128];
+	// ãƒ›ãƒ¢ã‚°ãƒ©ãƒ•ã‚£è¡Œåˆ—ã«ã‚ˆã‚‹å¤‰æ›å¾Œã®ç”»åƒæ ¼ç´å…ˆ
+	Mat transform_image; 	// ç”»åƒå˜ä½“ã§ã®å¤‰æ›çµæœ
+	Mat transform_image2; 	// ãƒ‘ãƒãƒ©ãƒå¹³é¢ã¸ã®å¤‰æ›çµæœ
 
+	// ãƒã‚¹ã‚¯é–¢ä¿‚ç”»åƒï¼ˆæ—¢å­˜ã®ãƒ‘ãƒãƒ©ãƒã®æœªæç”»é ˜åŸŸã®ã¿ã«æŠ•å½±ã™ã‚‹ãŸã‚ï¼‰
+	Mat mask; 			// ãƒ‘ãƒãƒ©ãƒç”»åƒã®ãƒã‚¹ã‚¯
+	Mat pano_black; 	// ãƒ‘ãƒãƒ©ãƒç”»åƒã¨åŒã˜ã‚µã‚¤ã‚ºã®é»’ç”»åƒ
+	Mat white_img; 	// ãƒ•ãƒ¬ãƒ¼ãƒ ã¨åŒã˜ã‚µã‚¤ã‚ºã®ç™½ç”»åƒ
+
+	int skip;					// åˆæˆé–‹å§‹ãƒ•ãƒ¬ãƒ¼ãƒ ç•ªå·
+	long end;					// åˆæˆçµ‚äº†ãƒ•ãƒ¬ãƒ¼ãƒ ç•ªå·
+	long frame_num;			// ç¾åœ¨ã®ãƒ•ãƒ¬ãƒ¼ãƒ ä½ç½®
+	int blur;					// ãƒ–ãƒ¬ã®ã—ãã„å€¤
+	long FRAME_MAX; 			// å‹•ç”»ã®æœ€å¤§ãƒ•ãƒ¬ãƒ¼ãƒ æ•°
+	int FRAME_T; 				// ãƒ•ãƒ¬ãƒ¼ãƒ é£›ã°ã—é–“éš”
+
+	// å„ç¨®ãƒ•ãƒ©ã‚°
+	bool f_comp = false;		// ç·šå½¢è£œå®Œ
+	bool f_center = false;	// ã‚»ãƒ³ã‚¿ãƒ¼ã‚µãƒ¼ã‚¯ãƒ«ä¸­å¿ƒ
+	bool f_video = false;	// ãƒ“ãƒ‡ã‚ªæ›¸ãå‡ºã—
+
+	float fps = 30;	// æ›¸ãå‡ºã—ãƒ“ãƒ‡ã‚ªã®fps
+	string n_video;	// æ›¸ãå‡ºã—ãƒ“ãƒ‡ã‚ªãƒ•ã‚¡ã‚¤ãƒ«å
+	string cam_data;	// æ˜ åƒã‚»ãƒ³ã‚µãƒ•ã‚¡ã‚¤ãƒ«å
+	string n_center;	// ã‚»ãƒ³ã‚¿ãƒ¼ã‚µãƒ¼ã‚¯ãƒ«ç”»åƒå
+
+	// æ˜ åƒ ã‚»ãƒ³ã‚µãƒ•ã‚¡ã‚¤ãƒ«åå–å¾—
 	char imagefileName[256];
 	char timefileName[256];
 	char sensorfileName[256];
+	FILE *SensorFP;
 
-	ofstream log("composition_log.txt");
-	vector<string> v_log_str;
-	string log_str;
+	// å…¨ãƒ›ãƒ¢ã‚°ãƒ©ãƒ•ã‚£è¡Œåˆ—ã‚’ã‚¢ã‚¦ãƒˆãƒ—ãƒƒãƒˆ
+	std::ofstream out_Hmat("mat_homography.txt", std::ios::out);
 
-	// ÆÃÄ§ÅÀ¤Î½¸¹ç¤ÈÆÃÄ§ÎÌ
+	// å„ç¨®ã‚¢ãƒ«ã‚´ãƒªã‚ºãƒ ã«ã‚ˆã‚‹ç‰¹å¾´ç‚¹æ¤œå‡ºãŠã‚ˆã³ç‰¹å¾´é‡è¨˜è¿°
+	string algorithm_type;
+	Ptr<Feature2D> feature;
+	// SIFT
+	//SIFT feature;
+
+	// SURF
+	//SURF feature(5, 3, 4, true);
+
+	// ORB
+	//ORB featur;
+
+	// ç‰¹å¾´ç‚¹ã®ãƒãƒƒãƒãƒ£ãƒ¼ï¼ˆãƒ¦ãƒ¼ã‚¯ãƒªãƒƒãƒ‰è·é›¢ã¨ãƒãƒŸãƒ³ã‚°è·é›¢ã§ä½¿ç”¨ã™ã‚‹é–¢æ•°ã‚’å¤‰ãˆã‚‹ï¼‰
+	FlannBasedMatcher matcher;
+	//BFMatcher matcher(cv::NORM_HAMMING, true);
+
+	// å¯¾å¿œç‚¹ã®å¯¾ã®æ ¼ç´å…ˆ
+	std::vector<cv::DMatch> matches;				// matcherã«ã‚ˆã‚Šæ±‚ã‚ãŸãŠãŠã¾ã‹ãªå¯¾ã‚’æ ¼ç´
+
+	// ç‰¹å¾´ç‚¹ã®é›†åˆã¨ç‰¹å¾´é‡
 	std::vector<KeyPoint> objectKeypoints, imageKeypoints;
 	Mat objectDescriptors, imageDescriptors;
+	vector<Point2f> pt1, pt2; 							// ç”»åƒå¯¾ã«ãŠã‘ã‚‹ç‰¹å¾´ç‚¹åº§ã®é›†åˆ
 
-	//	double tt = (double) cvGetTickCount();
+	// ã‚ˆã‚Šè‰¯ã„ãƒšã‚¢ã®æ ¼ç´å…ˆ
+	double min_dist = DBL_MAX;
+	std::vector<cv::DMatch> good_matches;
+	std::vector<KeyPoint> good_objectKeypoints;
+	std::vector<KeyPoint> good_imageKeypoints;
 
-	// ¥Û¥â¥°¥é¥Õ¥£¹ÔÎóÍÑÊÑ¿ô
-	Mat homography = Mat(3, 3, CV_64FC1); // ²èÁüÂĞ¤Ë¤ª¤±¤ë¥Û¥â¥°¥é¥Õ¥£¡İ
-	Mat h_base = cv::Mat::eye(3, 3, CV_64FC1); // ¥»¥ó¥¿¡¼¥µ¡¼¥¯¥ë²èÁü¤Ø¤Î¥Û¥â¥°¥é¥Õ¥£¡İ
-	//	vector<int> ptpairs;
-	vector<Point2f> pt1, pt2; // ²èÁüÂĞ¤Ë¤ª¤±¤ëÆÃÄ§ÅÀ¤Î½¸¹ç
+	Mat homography = Mat(3, 3, CV_64FC1); 				// ç”»åƒå¯¾ã«ãŠã‘ã‚‹ãƒ›ãƒ¢ã‚°ãƒ©ãƒ•ã‚£
+	Mat h_base = cv::Mat::eye(3, 3, CV_64FC1); 		// ãƒ‘ãƒãƒ©ãƒå¹³é¢ã¸ã®ãƒ›ãƒ¢ã‚°ãƒ©ãƒ•ã‚£
 	int n, w, h;
 
-	// ¥Ñ¥Î¥é¥ŞÊ¿ÌÌ¤Î
+	// ãƒ‘ãƒãƒ©ãƒå¹³é¢ã®æ§‹æˆ
 	int roll = 0;
 	int pitch = 0;
 	int yaw = 0;
@@ -260,15 +302,7 @@ int main(int argc, char** argv) {
 	Mat pitchMatrix = cv::Mat::eye(3, 3, CV_64FC1);
 	Mat yawMatrix = cv::Mat::eye(3, 3, CV_64FC1);
 
-	FILE *SensorFP = fopen(argv[1], "r");
-	fscanf(SensorFP, "%s", imagefileName);
-	fscanf(SensorFP, "%s", timefileName);
-	fscanf(SensorFP, "%s", sensorfileName);
-	fclose(SensorFP);
-
-	std::ofstream out_Hmat("mat_homography.txt", std::ios::out);
-
-	//¡¡¥Ñ¥Î¥é¥ŞÊ¿ÌÌ¤Ø¤Î¼Í±Æ¹ÔÎó¤ÎºîÀ®
+	//ã€€ãƒ‘ãƒãƒ©ãƒå¹³é¢ã¸ã®å°„å½±è¡Œåˆ—ã®ä½œæˆ
 	A1Matrix.at<double> (0, 2) = -640;
 	A1Matrix.at<double> (1, 2) = -360;
 	A1Matrix.at<double> (2, 2) = 1080;
@@ -277,53 +311,136 @@ int main(int argc, char** argv) {
 	A2Matrix.at<double> (1, 1) = 290;
 	A2Matrix.at<double> (0, 2) = 640;
 	A2Matrix.at<double> (1, 2) = 360;
-	SetRollRotationMatrix(&rollMatrix, (double) roll);
-	SetPitchRotationMatrix(&pitchMatrix, (double) pitch);
-	SetYawRotationMatrix(&yawMatrix, (double) yaw);
 
-	h_base = A2Matrix * A1Matrix * yawMatrix * pitchMatrix * rollMatrix;
+	try {
+		// ã‚³ãƒãƒ³ãƒ‰ãƒ©ã‚¤ãƒ³ã‚ªãƒ—ã‚·ãƒ§ãƒ³ã®å®šç¾©
+		options_description opt("Usage");
+		opt.add_options()
+				("cam", 		value<std::string>()->default_value("cam_data.txt"),	"å‹•ç”»åã‚„ã‚»ãƒ³ã‚µãƒ•ã‚¡ã‚¤ãƒ«åãŒè¨˜è¿°ã•ã‚ŒãŸãƒ•ã‚¡ã‚¤ãƒ«ã®æŒ‡å®š")
+				("center", 	value<std::string> (),									"ã‚»ãƒ³ã‚¿ãƒ¼ç”»åƒã®æŒ‡å®š")
+				("start,s", 	value<int> ()->default_value(0),						"ã‚¹ã‚¿ãƒ¼ãƒˆãƒ•ãƒ¬ãƒ¼ãƒ ã®æŒ‡å®š")
+				("end,e", 		value<int> (), 											"çµ‚äº†ãƒ•ãƒ¬ãƒ¼ãƒ ã®æŒ‡å®š")
+				("comp",		value<bool> ()->default_value(false), 					"è£œå®Œã®è¨­å®š")
+				("inter,i",	value<int> ()->default_value(9), 						"å–å¾—ãƒ•ãƒ¬ãƒ¼ãƒ ã®é–“éš”")
+				("blur,b", 	value<	int> ()->default_value(0), 						"ãƒ–ãƒ©ãƒ¼ã«ã‚ˆã‚‹ãƒ•ãƒ¬ãƒ¼ãƒ ã®ç ´æ£„ã®é–¾å€¤")
+				("video,v",	value<std::string> (),									"æ›¸ãã ã™å‹•ç”»ãƒ•ã‚¡ã‚¤ãƒ«åã®æŒ‡å®š")
+				("fps,f",		value<int> ()->default_value(30), 						"æ›¸ãã ã™å‹•ç”»ã®ãƒ•ãƒ¬ãƒ¼ãƒ ãƒ¬ãƒ¼ãƒˆã®æŒ‡å®š")
+				("algo,a",		value<string>()->default_value("SURF"),					"ç‰¹å¾´ç‚¹æŠ½å‡ºç­‰ã®ã‚¢ãƒ«ã‚´ãƒªã‚ºãƒ ã®æŒ‡å®š")
+				("help,h", 																"ãƒ˜ãƒ«ãƒ—ã®å‡ºåŠ›");
 
-	// Æ°²è¥Õ¥¡¥¤¥ë¤ò¥ª¡¼¥×¥ó
+		// ã‚ªãƒ—ã‚·ãƒ§ãƒ³ã®ãƒãƒƒãƒ—ã‚’ä½œæˆ
+		variables_map vm;
+		store(parse_command_line(argc, argv, opt), vm);
+		notify(vm);
+
+		// å¿…é ˆã‚ªãƒ—ã‚·ãƒ§ãƒ³ã®ç¢ºèª
+		if (vm.count("help") ) {
+			cout  << "  [option]... \n" << opt
+					<< endl;
+			return -1;
+		}
+
+		// å„ç¨®ã‚ªãƒ—ã‚·ãƒ§ãƒ³ã®å€¤ã‚’å–å¾—
+		cam_data = vm["cam"].as<string>();		// æ˜ åƒ ã‚»ãƒ³ã‚µãƒ•ã‚¡ã‚¤ãƒ«å
+
+		if (vm.count("start"))					// ã‚¹ã‚¿ãƒ¼ãƒˆãƒ•ãƒ¬ãƒ¼ãƒ ç•ªå·
+			skip = vm["start"].as<int>();
+		else
+			skip = 0;
+
+		if(vm.count("end"))						// çµ‚äº†ãƒ•ãƒ¬ãƒ¼ãƒ ç•ªå·
+			end = vm["end"].as<int>();
+
+		if(vm.count("center")){					// ã‚»ãƒ³ã‚¿ãƒ¼ã‚µãƒ¼ã‚¯ãƒ«ç”»åƒå
+			n_center = vm["center"].as<string>();
+			f_center = true;
+		}
+
+		if(vm.count("video")){					// æ›¸ãå‡ºã—å‹•ç”»ãƒ•ã‚¡ã‚¤ãƒ«å
+			n_video = vm["video"].as<string>();
+			f_video = true;
+		}
+
+		if(vm.count("algo"))
+			algorithm_type = vm["algo"].as<string>();
+
+		f_comp = vm["comp"].as<bool>();			// è£œå®Œã®æœ‰åŠ¹ç„¡åŠ¹
+		FRAME_T = vm["inter"].as<int>();		// ãƒ•ãƒ¬ãƒ¼ãƒ å–å¾—é–“éš”
+		blur = vm["blur"].as<int>();			// æ‰‹ãƒ–ãƒ¬é–¾å€¤
+		fps = vm["fps"].as<int>();				// æ›¸ãå‡ºã—å‹•ç”»ã®fps
+
+	} catch (exception& e) {
+		cerr << "error: " << e.what() << "\n";
+		return -1;
+	} catch (...) {
+		cerr << "Exception of unknown type!\n";
+		return -1;
+	}
+
+	// æ˜ åƒã€€ã‚»ãƒ³ã‚µãƒ•ã‚¡ã‚¤ãƒ«åã‚’å–å¾—
+	SensorFP = fopen(cam_data.c_str(), "r");
+	fscanf(SensorFP, "%s", imagefileName);
+	fscanf(SensorFP, "%s", timefileName);
+	fscanf(SensorFP, "%s", sensorfileName);
+	fclose(SensorFP);
+
+	if(f_center)
+		center_img = imread(n_center);
+
+	if(f_center && center_img.empty()){
+		cerr << "Cant open center_img " << n_center << endl;
+		f_center = false;
+		//return -1;
+	}
+
+	// å‹•ç”»ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ã‚ªãƒ¼ãƒ—ãƒ³
 	if (!(cap.open(string(imagefileName)))) {
 		fprintf(stderr, "Avi Not Found!!\n");
 		return -1;
 	}
-	cout << h_base << endl;
 
-	// Áí¥Õ¥ì¡¼¥à¿ô¤Î¼èÆÀ
+	// ç·ãƒ•ãƒ¬ãƒ¼ãƒ æ•°ã®å–å¾—
 	FRAME_MAX = cap.get(CV_CAP_PROP_FRAME_COUNT);
-	float fps = 10;
+	if(FRAME_MAX < end)
+		end = FRAME_MAX;
 
 	std::cout << "Video Property : total flame = " << FRAME_MAX << endl;
 	cout << "fps = " << fps << endl;
-	// ¹çÀ®³«»Ï¥Õ¥ì¡¼¥à¤Ş¤Ç¥¹¥­¥Ã¥×
-	cap.set(CV_CAP_PROP_POS_FRAMES, skip);
 
-	// Æ°²è¤«¤é¼èÆÀ¤·¤¿²èÁüÂĞ¤Î³ÊÇ¼Àè
-	Mat image;
-	Mat object;
-	Mat gray_image;
+	// åˆæˆé–‹å§‹ãƒ•ãƒ¬ãƒ¼ãƒ ã¾ã§ã‚¹ã‚­ãƒƒãƒ—
+	if(skip > 0){
+		cap.set(CV_CAP_PROP_POS_FRAMES, skip+1);
+		frame_num = skip+1;
+	}else{
+		frame_num = 0;
+	}
+	feature = Feature2D::create(algorithm_type);
+	if(algorithm_type.compare(SURF) ){
+	feature->set("extended", 1);
+	feature->set("hessianThreshold",5);
+	feature->set("nOctaveLayers",4);
+	feature->set("nOctaves", 3);
+	feature->set("upright",0);
+	}
 
-	// ºÇ½é¤Î¥Õ¥ì¡¼¥à¤ò¼èÆÀ¡Ê¥»¥ó¥¿¡¼¥µ¡¼¥¯¥ë²èÁü¤Ëº¹¤·ÂØ¤¨¡Ë
-	if (f_center)
-		image = center_img.clone();
-	else
-		cap >> image;
+	//	double tt = (double) cvGetTickCount();
 
-	cvtColor(image, gray_image, CV_RGB2GRAY);
+	// å„ç¨®å›è»¢ã‚’ãƒ‘ãƒãƒ©ãƒå¹³é¢ã«é©ç”¨
+	SetRollRotationMatrix(&rollMatrix, (double) roll);
+	SetPitchRotationMatrix(&pitchMatrix, (double) pitch);
+	SetYawRotationMatrix(&yawMatrix, (double) yaw);
 
-	// ³Æ¼ï¥¢¥ë¥´¥ê¥º¥à¤Ë¤è¤ëÆÃÄ§ÅÀ¸¡½Ğ¤ª¤è¤ÓÆÃÄ§ÎÌµ­½Ò
-	string algorithm_type = "SURF";
+	// æœ€çµ‚çš„ãªãƒ‘ãƒãƒ©ãƒå¹³é¢ã¸ã®ãƒ›ãƒ¢ã‚°ãƒ©ãƒ•ã‚£è¡Œåˆ—ã‚’è¨ˆç®—
+	h_base = A2Matrix * A1Matrix * yawMatrix * pitchMatrix * rollMatrix;
 
-	// SIFT 
-	//	cv::SIFT feature;
-	//Surf
-	SURF feature(5, 3, 4, true);
-	feature.getParams(v_log_str);
+	cout << h_base << endl;
 
 	/*logging*/
-	log << argv[0] << " " << argv[1] << " " << argv[2] << " " << argv[3] << " "
-			<< argv[4] << " " << argv[5] << endl;
+	ofstream log("composition_log.txt");
+	vector<string> v_log_str;
+	string log_str;
+
+	feature->getParams(v_log_str);
 
 	log << "<avi_file_name>" << endl << imagefileName << endl;
 	log << "<A1>" << endl << A1Matrix << endl;
@@ -334,89 +451,87 @@ int main(int argc, char** argv) {
 	log << "<Comp>" << endl;
 	log << f_comp << endl;
 	log << "<use center>" << endl;
-	log << f_center << endl;
-	log << "<deblur>" << endl << f_deblur << endl;
+	if(center_img.empty())
+		log << 1 << endl;
+	else
+		log << 0 << endl;
+	log << "<deblur>" << endl << blur << endl;
 	log << "<Algorithm> " << endl << algorithm_type << endl;
 	log << "<Algorithm Param>" << endl;
 	for (int ii = 0; ii < v_log_str.size(); ii++)
-		log << v_log_str[ii] << " " << feature.getDouble(v_log_str[ii]) << endl;
+		log << v_log_str[ii] << " " << feature->getDouble(v_log_str[ii]) << endl;
 
 
-	log << "<Algorithm> " << endl << "SURF" << endl;
-	log << "<Algorithm Param>" << endl;
-	for (int ii = 0; ii < log_str.size(); ii++)
-		log << log_str[ii] << " " << feature.getDouble(log_str[ii]) << endl;
 
-	//SurfFeatureDetector detector(5, 3, 4, true);
-	//SurfDescriptorExtractor extractor;
+	// æœ€åˆã®ãƒ•ãƒ¬ãƒ¼ãƒ ã‚’å–å¾—ï¼ˆã‚»ãƒ³ã‚¿ãƒ¼ã‚µãƒ¼ã‚¯ãƒ«ç”»åƒã«å·®ã—æ›¿ãˆï¼‰
+	if (f_center)
+		image = center_img.clone();
+	else
+		cap >> image;
 
-	//OrbFeatureDetector detector;
-	//OrbDescriptorExtractor extractor;
+	cvtColor(image, gray_image, CV_RGB2GRAY);
 
-	// ÆÃÄ§ÅÀ¤Î¸¡½Ğ¤ÈÆÃÄ§ÎÌ¤Îµ­½Ò
-	feature(gray_image, Mat(), imageKeypoints, imageDescriptors);
-
-	// ¥Û¥â¥°¥é¥Õ¥£¡İ¹ÔÎó¤Ë¤è¤ëÊÑ´¹¸å¤Î²èÁü³ÊÇ¼Àè
-	Mat transform_image; // ²èÁüÃ±ÂÎ¤Ç¤ÎÊÑ´¹·ë²Ì
-	Mat transform_image2 = cv::Mat::zeros(image.size(), CV_8UC3); // ¥Ñ¥Î¥é¥ŞÊ¿ÌÌ¤Ø¤ÎÊÑ´¹·ë²Ì
-	warpPerspective(image, transform_image2, h_base, image.size()); // ÀèÆ¬¥Õ¥ì¡¼¥à¤ò¥Ñ¥Î¥é¥ŞÊ¿ÌÌ¤ØÅê±Æ
-
-	//  ¥Ñ¥Î¥é¥ŞÊ¿ÌÌ¤Ø¼Í±Æ¤¹¤ëºİ¤Î¥Ş¥¹¥¯½èÍı
+	// ãƒã‚¹ã‚¯ã‚¤ãƒ¡ãƒ¼ã‚¸é–¢ä¿‚ã‚’ç”Ÿæˆ
+	//  ãƒ‘ãƒãƒ©ãƒå¹³é¢ã¸å°„å½±ã™ã‚‹éš›ã®ãƒã‚¹ã‚¯å‡¦ç†
 	w = image.cols;
 	h = image.rows;
+	mask = Mat(h, w, CV_8U, cv::Scalar(0));
+	pano_black = Mat(h, w, CV_8U, cv::Scalar(0));
+	white_img = Mat(image.rows, image.cols, CV_8U, cv::Scalar(255));
 
-	Mat mask(h, w, CV_8U, cv::Scalar(0)); //pano black
-	Mat matrixA(h, w, CV_8U, cv::Scalar(0)); //pano black
-	Mat matrixB(image.rows, image.cols, CV_8U, cv::Scalar(255)); //mask white
 
-	// ¥Ñ¥Î¥é¥ŞÆ°²è¥Õ¥¡¥¤¥ë¤òºîÀ®
-	VideoWriter.open("panorama.avi", CV_FOURCC('X', 'V', 'I', 'D'), (int) fps,
-			cvSize(w, h), 1);
+	// ç‰¹å¾´ç‚¹ã®æ¤œå‡ºã¨ç‰¹å¾´é‡ã®è¨˜è¿°
+	feature->operator ()(gray_image, Mat(), imageKeypoints, imageDescriptors);
 
-	// ¥Õ¥ì¡¼¥à¤òÈô¤Ğ¤¹
-	for (int i = 0; i < FRAME_T; i++) {
-		cap >> object;
-		frame_num++;
-	}
+	warpPerspective(image, transform_image2, h_base, image.size()); // å…ˆé ­ãƒ•ãƒ¬ãƒ¼ãƒ ã‚’ãƒ‘ãƒãƒ©ãƒå¹³é¢ã¸æŠ•å½±
 
-	// ÆÃÄ§ÅÀ¤Î¥Ş¥Ã¥Á¥ã¡¼¡Ê¥æ¡¼¥¯¥ê¥Ã¥Éµ÷Î¥¤È¥Ï¥ß¥ó¥°µ÷Î¥¤Ç»ÈÍÑ¤¹¤ë´Ø¿ô¤òÊÑ¤¨¤ë¡Ë
-	cv::FlannBasedMatcher matcher;
-	//cv::BFMatcher matcher(cv::NORM_HAMMING, true);
-	std::vector<cv::DMatch> matches;
 
-	// ¼ê¥Ö¥ì¸¡½ĞÍÑ³Æ¼ïÊÑ¿ô //
+
+	// ãƒ‘ãƒãƒ©ãƒå‹•ç”»ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ä½œæˆ
+	if(f_video)
+		VideoWriter.open(n_video.c_str(), CV_FOURCC('X', 'V', 'I', 'D'), (int) fps,
+				cvSize(w, h), 1);
+
+	// ãƒ•ãƒ¬ãƒ¼ãƒ ã‚’é£›ã°ã™
+	if(!f_center)
+		for (int i = 0; i < FRAME_T; i++) {
+			cap >> object;
+			frame_num++;
+		}
+
+	// æ‰‹ãƒ–ãƒ¬æ¤œå‡ºç”¨å„ç¨®å¤‰æ•°
 	int img_num = 0;
-	stringstream ss; // ½ñ¤­½Ğ¤·¥Õ¥¡¥¤¥ëÌ¾
+	stringstream ss; // æ›¸ãå‡ºã—ãƒ•ã‚¡ã‚¤ãƒ«å
 	cv::Mat tmp_img; //
-	cv::Mat sobel_img; // ¥¨¥Ã¥¸²èÁü³ÊÇ¼Àè
+	cv::Mat sobel_img; // ã‚¨ãƒƒã‚¸ç”»åƒæ ¼ç´å…ˆ
 
 	vector<Mat> hist_image;
 	int blur_skip;
 
+	// ã‚»ãƒ³ã‚¿ãƒ¼ã‚µãƒ¼ã‚¯ãƒ«ç”»åƒã‚’ç”¨ã„ãŸå ´åˆï¼Œã‚»ãƒ³ã‚¿ãƒ¼ã‚µãƒ¼ã‚¯ãƒ«ã¨å‹•ç”»ã®æœ€åˆã®ãƒ•ãƒ¬ãƒ¼ãƒ é–“ã¯
+	// è£œå®Œã—ãªã„ã‚ˆã†ã«ã™ã‚‹
 	if (f_center)
 		blur_skip = 0;
 	else
 		blur_skip = FRAME_T;
-
-	while (frame_num <= FRAME_MAX && frame_num <= end) {
-
-		//		while(dev[0] < blur){
+	while (frame_num < end && frame_num < FRAME_MAX + FRAME_T + 1) {
+		//while(dev[0] < blur){
 		cap >> object;
 		frame_num++;
 		printf("\nframe=%d\n", frame_num);
-
+/*
 		cv::Laplacian(object, tmp_img, CV_32F, 1, 1);
 		//Canny(cvarrToMat(objectc), sobel_img,50,100);
 		cv::convertScaleAbs(tmp_img, sobel_img, 1, 0);
 
-		// ½Ä²££±£°Ê¬³ä¤·¤¿¥¨¥Ã¥¸²èÁü¤Î³Æ¥Ò¥¹¥È¥°¥é¥à¤ÎÎÎ°è³ÎÊİ
+		 // ç¸¦æ¨ªï¼‘ï¼åˆ†å‰²ã—ãŸã‚¨ãƒƒã‚¸ç”»åƒã®å„ãƒ’ã‚¹ãƒˆã‚°ãƒ©ãƒ ã®é ˜åŸŸç¢ºä¿
 		for (int i = 0; i < 100; i++)
 			hist_image.push_back(Mat(200, 260, CV_8U, cv::Scalar(255)));
-		/*
-		 // ¥Ò¥¹¥È¥°¥é¥à²èÁü¤òºîÀ®
+
+		 // ãƒ’ã‚¹ãƒˆã‚°ãƒ©ãƒ ç”»åƒã‚’ä½œæˆ
 		 get_histimage(sobel_img, hist_image.data());
 
-		 // ³Æ¥Ò¥¹¥È¥°¥é¥à¤ò½ç¼¡É½¼¨
+		 // å„ãƒ’ã‚¹ãƒˆã‚°ãƒ©ãƒ ã‚’é †æ¬¡è¡¨ç¤º
 		 cvNamedWindow("Histogram", CV_WINDOW_AUTOSIZE);
 		 for(int i = 0; i < 100;i++){
 		 imshow("Histogram", hist_image[i]);
@@ -442,36 +557,12 @@ int main(int argc, char** argv) {
 		 }
 		 */
 
-		/*
-		 if (object.empty() || image.empty()) {
-		 fprintf(stderr, "Can not load %s and/or %s\n"
-		 "Usage: find_obj [<object_filename> <scene_filename>]\n",
-		 object_filename, scene_filename);
-		 exit(-1);
-		 }
-		 */
 		cvtColor(object, gray_image, CV_RGB2GRAY);
-		feature(gray_image, Mat(), objectKeypoints, objectDescriptors);
-
-		cv::Laplacian(object, tmp_img, CV_32F, 1, 1);
-		cv::convertScaleAbs(tmp_img, sobel_img, 1, 0);
-		ss << "img/img_" << frame_num << ".jpg";
-		std::cout << ss.str() << endl;
-
-		imwrite(ss.str(), image);
-		ss.clear();
-		ss.str("");
-
-		ss << "img/sobel_img_" << frame_num << ".jpg";
-		std::cout << ss.str() << endl;
-		imwrite(ss.str(), sobel_img);
-		ss.clear();
-		ss.str("");
+		feature->operator()(gray_image, Mat(), objectKeypoints, objectDescriptors);
 
 		matcher.match(objectDescriptors, imageDescriptors, matches);
 		cout << "matches : " << matches.size() << endl;
 
-		double min_dist = DBL_MAX;
 		for (int i = 0; i < (int) matches.size(); i++) {
 			double dist = matches[i].distance;
 			if (dist < min_dist)
@@ -480,10 +571,7 @@ int main(int argc, char** argv) {
 
 		cout << "min dist :" << min_dist << endl;
 
-		//  ÂĞ±şÅÀ´Ö¤Î°ÜÆ°µ÷Î¥¤Ë¤è¤ëÎÉ¤¤¥Ş¥Ã¥Á¥ó¥°¤Î¼è¼ÎÁªÂò
-		std::vector<cv::DMatch> good_matches;
-		std::vector<KeyPoint> good_objectKeypoints;
-		std::vector<KeyPoint> good_imageKeypoints;
+		//  å¯¾å¿œç‚¹é–“ã®ç§»å‹•è·é›¢ã«ã‚ˆã‚‹è‰¯ã„ãƒãƒƒãƒãƒ³ã‚°ã®å–æ¨é¸æŠ
 		good_matches.clear();
 		pt1.clear();
 		pt2.clear();
@@ -505,9 +593,9 @@ int main(int argc, char** argv) {
 			}
 		}
 
-		// ¥Ş¥Ã¥Á¥ó¥°·ë²Ì¤ò¥ê¥µ¥¤¥º¤·¤ÆÉ½¼¨
+		// ãƒãƒƒãƒãƒ³ã‚°çµæœã‚’ãƒªã‚µã‚¤ã‚ºã—ã¦è¡¨ç¤º
 		Mat result, r_result;
-		cv::drawMatches(object, objectKeypoints, image, imageKeypoints,
+		drawMatches(object, objectKeypoints, image, imageKeypoints,
 				good_matches, result);
 		resize(result, r_result, Size(), 0.5, 0.5, INTER_LANCZOS4);
 		namedWindow("matches", CV_WINDOW_AUTOSIZE);
@@ -517,86 +605,67 @@ int main(int argc, char** argv) {
 		imageKeypoints = objectKeypoints;
 		objectDescriptors.copyTo(imageDescriptors);
 		image = object.clone();
-		/*
-		 cout << "Êä´°³«»Ï" << endl;
-		 vector<Point2f> dist;
-		 vector<Point2f> est_pt1 = pt1, est_pt2;
-		 Mat est_h_base = h_base.clone();
-		 float inv_skip = 1.0 / (float) (blur_skip + 1);
-		 frame_num -= blur_skip;
-		 cap.set(CV_CAP_PROP_POS_FRAMES, frame_num - blur_skip);
-		 cout << "pt1 " << pt1[0] << endl;
-		 cout << "pt2 " << pt2[0] << endl;
-		 for (int k = 0; k < blur_skip; k++) {
-		 est_pt2.clear();
-		 for (int l = 0; l < good_objectKeypoints.size(); l++)
-		 est_pt2.push_back(est_pt1[l] + (pt2[l] - pt1[l]) * inv_skip);
-		 cout << "est_pt1 " << est_pt1[0] << endl;
-		 cout << "est_pt2 " << est_pt2[0] << endl;
-		 //waitKey(0);
-		 // Êä´°¤·¤¿ÅÀ¤Ç¥Û¥â¥°¥é¥Õ¥£¡İ¹ÔÎó¤ò·×»»
-		 n = pt1.size() / 2;
-		 printf("n = %d\n", n);
-		 homography = findHomography(Mat(est_pt1), Mat(est_pt2), CV_RANSAC,
-		 5.0);
+		if (f_comp) {
+			cout << "start comp" << endl;
+			vector<Point2f> dist;
+			vector<Point2f> est_pt1 = pt1, est_pt2;
+			Mat est_h_base = h_base.clone();
+			float inv_skip = 1.0 / (float) (blur_skip + 1);
+			frame_num -= blur_skip;
+			cap.set(CV_CAP_PROP_POS_FRAMES, frame_num - blur_skip);
+			cout << "pt1 " << pt1[0] << endl;
+			cout << "pt2 " << pt2[0] << endl;
+			for (int k = 0; k < blur_skip; k++) {
+				est_pt2.clear();
+				for (int l = 0; l < good_objectKeypoints.size(); l++)
+					est_pt2.push_back(est_pt1[l] + (pt2[l] - pt1[l]) * inv_skip);
+				cout << "est_pt1 " << est_pt1[0] << endl;
+				cout << "est_pt2 " << est_pt2[0] << endl;
 
-		 // ¥Ñ¥Î¥é¥ŞÊ¿ÌÌ¤Ø¤Î¥Û¥â¥°¥é¥Õ¥£¡¼¤ò·×»»
-		 est_h_base = est_h_base * homography;
-		 //h_base = h_base * homography;
+				// è£œå®Œã—ãŸç‚¹ã§ãƒ›ãƒ¢ã‚°ãƒ©ãƒ•ã‚£âˆ’è¡Œåˆ—ã‚’è¨ˆç®—
+				n = pt1.size() / 2;
+				printf("n = %d\n", n);
+				homography = findHomography(Mat(est_pt1), Mat(est_pt2),
+						CV_RANSAC, 5.0);
 
-		 // Èô¤Ğ¤·¤¿¥Õ¥ì¡¼¥à¤ò¼èÆÀ¤·¥Ñ¥Î¥é¥ŞÊ¿ÌÌ¤ØÅê±Æ
+				// ãƒ‘ãƒãƒ©ãƒå¹³é¢ã¸ã®ãƒ›ãƒ¢ã‚°ãƒ©ãƒ•ã‚£ãƒ¼ã‚’è¨ˆç®—
+				est_h_base = est_h_base * homography;
 
+				// é£›ã°ã—ãŸãƒ•ãƒ¬ãƒ¼ãƒ ã‚’å–å¾—ã—ãƒ‘ãƒãƒ©ãƒå¹³é¢ã¸æŠ•å½±
+				cap >> object;
+				warpPerspective(object, transform_image, est_h_base,
+						object.size());
 
-		 cap >> object;
-		 warpPerspective(object, transform_image, est_h_base, object.size());
-		 Mat h2 = est_h_base;
-		 warpPerspective(matrixB, matrixA, h2, matrixB.size(),
-		 CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
+				warpPerspective(white_img, pano_black, est_h_base, white_img.size(),
+						CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
 
-		 // ÆÃÄ§ÅÀ¤ò¥³¥Ô¡¼
-		 est_pt1 = est_pt2;
+				// ç‰¹å¾´ç‚¹ã‚’ã‚³ãƒ”ãƒ¼
+				est_pt1 = est_pt2;
+				make_pano(transform_image,transform_image2,mask,pano_black);
 
-		 for (int i = 0; i < w; i++) {
-		 for (int j = 0; j < h; j++) {
-		 cal = transform_image.at<Vec3b> (j, i);
-		 //               if(cal.val[0]!=0||cal.val[1]!=0||cal.val[2]!=0){
-		 tmpc = transform_image2.at<Vec3b> (j, i);
-		 if (mask.at<unsigned char> (j, i) == 0) {
-		 //if(tmpc.val[0]==0&&tmpc.val[1]==0&&tmpc.val[2]==0){
-		 tmpc.val[0] = cal.val[0];
-		 tmpc.val[1] = cal.val[1];
-		 tmpc.val[2] = cal.val[2];
-		 if (matrixA.at<unsigned char> (j, i) == 255)
-		 mask.at<unsigned char> (j, i) = matrixA.at<
-		 unsigned char> (j, i);
+				ss << "frame = " << frame_num;
+				putText(transform_image, ss.str(), Point(100, 100),
+						CV_FONT_HERSHEY_SIMPLEX, 1.0, Scalar(255, 255, 255), 1,
+						8);
+				ss.clear();
+				ss.str("");
+				if(f_video)
+					VideoWriter.write(transform_image);
+				imshow("Object Correspond", transform_image2);
+				frame_num++;
+				waitKey(30);
+				//cvWaitKey(0);
 
-		 }
-		 transform_image2.at<Vec3b> (j, i) = tmpc;
-		 }
-		 }
-		 ss << "frame = " << frame_num;
-		 putText(transform_image, ss.str(), Point(100, 100),
-		 CV_FONT_HERSHEY_SIMPLEX, 1.0, Scalar(255, 255, 255), 1, 8);
-		 ss.clear();
-		 ss.str("");
-		 VideoWriter.write(transform_image);
-		 imshow("Object Correspond", transform_image2);
-		 frame_num++;
-		 waitKey(30);
-		 //cvWaitKey(0);
-
-		 }
-		 */
-		//n = ptpairs.size()/2;
+			}
+			// è£œå®Œã®éš›ã«ä¸Šæ›¸ãã—ã¦ã„ã‚‹ã®ã§ãƒ•ãƒ¬ãƒ¼ãƒ ã‚’å†å–å¾—
+			cap >> object;
+		}
 
 		n = pt1.size();
 		printf("n = %d\n", n);
 		printf("num_of_obj = %d\n", good_objectKeypoints.size());
 		printf("num_of_img = %d\n", good_imageKeypoints.size());
 		if (n >= 4) {
-
-			//			_pt1 = Mat(pt1);
-			//			_pt2 = Mat(pt2);
 			homography = findHomography(Mat(pt1), Mat(pt2), CV_RANSAC, 5.0);
 		} else {
 			setHomographyReset(&homography);
@@ -608,26 +677,28 @@ int main(int argc, char** argv) {
 
 		h_base = h_base * homography;
 
-		// Êä´°¤Îºİ¤Ë¾å½ñ¤­¤·¤Æ¤¤¤ë¤Î¤Ç¥Õ¥ì¡¼¥à¤òºÆ¼èÆÀ
-		cap >> object;
 		warpPerspective(object, transform_image, h_base, object.size());
 
 		Mat h2 = h_base;
-		warpPerspective(matrixB, matrixA, h2, matrixB.size(), CV_INTER_LINEAR
+		warpPerspective(white_img, pano_black, h2, white_img.size(), CV_INTER_LINEAR
 				| CV_WARP_FILL_OUTLIERS);
 
-		make_pano(transform_image, transform_image2, mask, matrixA);
+		make_pano(transform_image, transform_image2, mask, pano_black);
+
 		ss << "frame = " << frame_num;
 		putText(transform_image, ss.str(), Point(100, 100),
 				CV_FONT_HERSHEY_SIMPLEX, 1.0, Scalar(255, 255, 255), 1, 8);
 		ss.clear();
 		ss.str("");
-		VideoWriter.write(transform_image);
+
+		if(f_video)
+			VideoWriter.write(transform_image);
+
 		imshow("Object Correspond", transform_image2);
 		waitKey(30);
 		blur_skip = FRAME_T;
-		for (int i = 0; i < FRAME_T; i++) {
 
+		for (int i = 0; i < FRAME_T; i++) {
 			cap >> object;
 			frame_num++;
 		}

@@ -1,14 +1,23 @@
-/home/k-sakamoto/workspace/my_panorama/Debug/my_panorama cam_data.txt center/GC_A_04_center.png 0 2000 5
 <avi_file_name>
-/d/mvsraid/DATA/2013-06-28-FukuiCityGym-BasketBall/ORIGINAL/GC-A-04/20130628_141343_308.3gp
-<h_base>
-[290, 0, 505600;
-  0, 290, 284400;
+../movie/GC-A-03/20130628_140628_758.3gp
+<A1>
+[1, 0, -640;
+  0, 1, -360;
   0, 0, 1080]
+<A2>
+[290, 0, 640;
+  0, 290, 360;
+  0, 0, 1]
+<roll pitch yaw>
+0 0 0
 <FRAME_ T> 
 9
 <Comp>
-1
+0
+<use center>
+0
+<deblur>
+0
 <Algorithm> 
 SURF
 <Algorithm Param>
