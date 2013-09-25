@@ -294,7 +294,7 @@ int main(int argc, char** argv) {
 	// パノラマ平面の構成
 	int roll = 0;
 	int pitch = 0;
-	int yaw = -30;
+	int yaw = 0;
 	Mat A1Matrix = cv::Mat::eye(3, 3, CV_64FC1);
 	Mat A2Matrix = cv::Mat::eye(3, 3, CV_64FC1);
 
@@ -348,6 +348,8 @@ int main(int argc, char** argv) {
 
 		if (vm.count("end")) // 終了フレーム番号
 			end = vm["end"].as<int> ();
+		else
+			end = 20000;
 
 		if (vm.count("center")) { // センターサークル画像名
 			n_center = vm["center"].as<string> ();
@@ -694,6 +696,8 @@ int main(int argc, char** argv) {
 			setHomographyReset(&homography);
 			printf("frame_num = %d\n", frame_num);
 		}
+
+		cout << Mat(pt1) << endl;
 
 		cv::Mat tmp = homography.clone();
 		out_Hmat << tmp << endl;

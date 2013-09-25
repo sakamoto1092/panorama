@@ -1,5 +1,5 @@
 <avi_file_name>
-../movie/GC-A-03/20130628_140628_758.3gp
+/d/mvsraid/DATA/2013-06-28-FukuiCityGym-BasketBall/ORIGINAL/GC-B-02/20130628_141343_308.3gp
 <A1>
 [1, 0, -640;
   0, 1, -360;
@@ -13,7 +13,7 @@
 <FRAME_ T> 
 9
 <Comp>
-0
+1
 <use center>
 0
 <deblur>
@@ -21,8 +21,8 @@
 <Algorithm> 
 SURF
 <Algorithm Param>
-extended 1
-hessianThreshold 5
-nOctaveLayers 4
-nOctaves 3
+extended 0
+hessianThreshold 100
+nOctaveLayers 3
+nOctaves 4
 upright 0
