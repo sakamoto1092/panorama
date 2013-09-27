@@ -361,9 +361,7 @@ int main(int argc, char** argv) {
 			f_video = true;
 		}
 
-		if (vm.count("algo"))
-			algorithm_type = vm["algo"].as<string> ();
-
+		algorithm_type = vm["algo"].as<string> ();
 		f_comp = vm["comp"].as<bool> (); // 補完の有効無効
 		FRAME_T = vm["inter"].as<int> (); // フレーム取得間隔
 		blur = vm["blur"].as<int> (); // 手ブレ閾値
@@ -418,13 +416,13 @@ int main(int argc, char** argv) {
 		frame_num = 0;
 	}
 	feature = Feature2D::create(algorithm_type);
-//	if (algorithm_type.compare("SURF") == 1) {
-//		feature->set("extended", 1);
-//		feature->set("hessianThreshold", 5.0);
-//		feature->set("nOctaveLayers", 4);
-//		feature->set("nOctaves", 3);
-//		feature->set("upright", 0);
-//	}
+	if (algorithm_type.compare("SURF") == 0) {
+		feature->set("extended", 1);
+		feature->set("hessianThreshold", 100);
+		feature->set("nOctaveLayers", 4);
+		feature->set("nOctaves", 3);
+		feature->set("upright", 0);
+	}
 
 	//	double tt = (double) cvGetTickCount();
 
@@ -733,7 +731,8 @@ int main(int argc, char** argv) {
 
 	namedWindow("Object Correspond", CV_WINDOW_AUTOSIZE);
 	imshow("Object Correspond", transform_image2);
-	cvWaitKey(0);
+	cout << "finished making the panorama" << endl;
+	waitKey(0);
 	imwrite("transform4.jpg", transform_image2);
 
 	return 0;
