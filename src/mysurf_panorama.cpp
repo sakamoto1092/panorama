@@ -132,7 +132,7 @@ void get_histimage(Mat image, Mat *hist_image) {
 	Scalar mean, dev; // 平均と分散の格納先
 	float hrange[] = { 0, 256 }; // ヒストグラムの輝度値レンジ
 	const float* range[] = { hrange }; // チャネルごとのヒストグラムの輝度値レンジ（グレースケールなので要素数は１）
-	int binNum = 126; // ヒストグラムの量子化の値
+	int binNum = 256; // ヒストグラムの量子化の値
 	int histSize[] = { binNum }; // チャネルごとのヒストグラムの量子化の値
 	int channels[] = { 0 }; // ヒストグラムを求めるチャネル指定
 	int dims = 1; // 求めるヒストグラムの数
@@ -264,7 +264,7 @@ int main(int argc, char** argv) {
 	//SIFT feature;
 
 	// SURF
-//	SURF feature(5, 3, 4, true);
+	//	SURF feature(5, 3, 4, true);
 
 	// ORB
 	//ORB featur;
@@ -432,7 +432,7 @@ int main(int argc, char** argv) {
 	SetYawRotationMatrix(&yawMatrix, (double) yaw);
 
 	// 最終的なパノラマ平面へのホモグラフィ行列を計算
-	h_base = A2Matrix * rollMatrix * pitchMatrix *   yawMatrix* A1Matrix;
+	h_base = A2Matrix * rollMatrix * pitchMatrix * yawMatrix * A1Matrix;
 
 	cout << h_base << endl;
 
@@ -518,49 +518,52 @@ int main(int argc, char** argv) {
 		cap >> object;
 		frame_num++;
 		printf("\nframe=%d\n", frame_num);
-		/*
-		 cv::Laplacian(object, tmp_img, CV_32F, 1, 1);
-		 //Canny(cvarrToMat(objectc), sobel_img,50,100);
-		 cv::convertScaleAbs(tmp_img, sobel_img, 1, 0);
 
-		 // 縦横１０分割したエッジ画像の各ヒストグラムの領域確保
-		 for (int i = 0; i < 100; i++)
-		 hist_image.push_back(Mat(200, 260, CV_8U, cv::Scalar(255)));
+		cv::Laplacian(object, tmp_img, CV_32F, 1, 1);
+		//Canny(cvarrToMat(objectc), sobel_img,50,100);
+		cv::convertScaleAbs(tmp_img, sobel_img, 1, 0);
 
-		 // ヒストグラム画像を作成
-		 get_histimage(sobel_img, hist_image.data());
+		// 縦横１０分割したエッジ画像の各ヒストグラムの領域確保
+		for (int i = 0; i < 100; i++)
+			hist_image.push_back(Mat(200, 260, CV_8U, cv::Scalar(255)));
 
-		 // 各ヒストグラムを順次表示
-		 cvNamedWindow("Histogram", CV_WINDOW_AUTOSIZE);
-		 for(int i = 0; i < 100;i++){
-		 imshow("Histogram", hist_image[i]);
-		 cvWaitKey(0);
-		 }
-		 */
-		/*
-		 if(count < blur){
-		 ss << "img/img_"<< frame_num << ".jpg";
-		 std::cout << ss.str();
-		 imwrite(ss.str(),cvarrToMat(imagec));
-		 ss.clear();
-		 ss.str("");
+		// ヒストグラム画像を作成
+		get_histimage(sobel_img, hist_image.data());
 
-		 ss << "img/sobel_img_"<< frame_num << ".jpg";
-		 std::cout << ss.str();
-		 imwrite(ss.str(),sobel_img);
-		 ss.clear();
-		 ss.str("");
-		 img_num++;
-		 count = 0;
-		 std::cout << "skip frame : " << frame_num << std::endl;
-		 }
-		 */
+		// 各ヒストグラムを順次表示
+		cvNamedWindow("Histogram", CV_WINDOW_AUTOSIZE);
+		for (int i = 0; i < 100; i++) {
+			//imshow("Histogram", hist_image[i]);
+			ss << "img/hist_img_" << frame_num << "_" << i << ".jpg";
+			imwrite(ss.str(), hist_image[i]);
+			ss.clear();
+			ss.str("");
+			//cvWaitKey(0);
+		}
+
+		// if(count < blur){
+		ss << "img/img_" << frame_num << ".jpg";
+		std::cout << ss.str();
+		imwrite(ss.str(), image);
+		ss.clear();
+		ss.str("");
+
+		ss << "img/sobel_img_" << frame_num << ".jpg";
+		std::cout << ss.str();
+		imwrite(ss.str(), sobel_img);
+		ss.clear();
+		ss.str("");
+		//img_num++;
+		//count = 0;
+		//std::cout << "skip frame : " << frame_num << std::endl;
+		// }
+
 
 		cvtColor(object, gray_image, CV_RGB2GRAY);
 		feature->operator ()(gray_image, Mat(), objectKeypoints,
 				objectDescriptors);
 
-//		matcher.match(objectDescriptors, imageDescriptors, matches);
+		//		matcher.match(objectDescriptors, imageDescriptors, matches);
 		std::vector<std::vector<cv::DMatch> > matches12, matches21;
 		int knn = 1;
 		matcher.knnMatch(imageDescriptors, objectDescriptors, matches21, knn);
@@ -600,7 +603,8 @@ int main(int argc, char** argv) {
 		for (int i = 0; i < (int) matches.size(); i++) {
 			if (round(objectKeypoints[matches[i].queryIdx].class_id) == round(
 					imageKeypoints[matches[i].trainIdx].class_id)) {
-				if (matches[i].distance > 0 && matches[i].distance < 2*(min_dist + 1)) {
+				if (matches[i].distance > 0 && matches[i].distance < 2
+						* (min_dist + 1)) {
 					//		  &&	(fabs(objectKeypoints[matches[i].queryIdx].pt.y - imageKeypoints[matches[i].trainIdx].pt.y)
 					//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
 
@@ -627,7 +631,7 @@ int main(int argc, char** argv) {
 		imageKeypoints = objectKeypoints;
 		objectDescriptors.copyTo(imageDescriptors);
 		image = object.clone();
-		if (f_comp &&  blur_skip != 0) {
+		if (f_comp && blur_skip != 0) {
 			cout << "start comp" << endl;
 			vector<Point2f> dist;
 			vector<Point2f> est_pt1 = pt1, est_pt2;
