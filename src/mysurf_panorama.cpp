@@ -141,14 +141,16 @@ void get_histimage(Mat image, Mat *hist_image) {
 	float max_dev = FLT_MIN, min_dev = FLT_MAX; // エッジ画像におけるヒストグラムの分散のmin max
 	float max_mean = FLT_MIN, min_mean = FLT_MAX; // エッジ画像におけるヒストグラムの平均のmin max
 	float sum_mean = 0.0;
+	Rect roi_rect;
 	Mat count(10, 10, CV_32F, cv::Scalar(0)); // エッジの数を格納するカウンタ
+
+	cout << "making histgram" << endl;
 	for (int i = 0; i < 10; i++) {
 		for (int j = 0; j < 10; j++) {
 			double max_value;
 			int bin_w;
-
-			calcHist(&Mat(image, cv::Rect(j * 128, i * 72, 128, 72)), 1,
-					channels, Mat(), hist, dims, histSize, range, true, false);
+			Mat tmp_img(image, cv::Rect(j * 128, i * 72, 128, 72));
+			calcHist(&tmp_img, 1,	channels, Mat(), hist, dims, histSize, range, true, false);
 
 			meanStdDev(hist, mean, dev);
 			count.at<float> (i, j) = dev[0];
@@ -167,18 +169,21 @@ void get_histimage(Mat image, Mat *hist_image) {
 			std::cout << "count : " << mean << std::endl;
 
 			minMaxLoc(hist, NULL, &max_value, NULL, NULL);
-
 			hist *= hist_image[i * 10 + j].rows / max_value;
 			bin_w = cvRound((double) 260 / 256);
 
 			for (int k = 0; k < 256; k++)
 				rectangle(hist_image[i * 10 + j], Point(k * bin_w, hist_image[i
 						* 10 + j].rows), cvPoint((k + 1) * bin_w, hist_image[i
-						* 10 + j].rows - cvRound(hist.data[k])),
+						* 10 + j].rows - cvRound(hist.at<float>(k))),
 						cvScalarAll(0), -1, 8, 0);
+			roi_rect.width = tmp_img.cols;
+			roi_rect.height = tmp_img.rows;
+			roi_rect.x=260;
+			Mat roi(hist_image[i * 10 + j], roi_rect);
+			tmp_img.copyTo(roi);
 		}
 	}
-
 }
 /*
  *  透視投影変換後の画像をパノラマ平面にマスクを用いて
@@ -294,7 +299,7 @@ int main(int argc, char** argv) {
 	// パノラマ平面の構成
 	int roll = 0;
 	int pitch = 0;
-	int yaw = 0;
+	int yaw = 30;
 	Mat A1Matrix = cv::Mat::eye(3, 3, CV_64FC1);
 	Mat A2Matrix = cv::Mat::eye(3, 3, CV_64FC1);
 
@@ -418,7 +423,7 @@ int main(int argc, char** argv) {
 	feature = Feature2D::create(algorithm_type);
 	if (algorithm_type.compare("SURF") == 0) {
 		feature->set("extended", 1);
-		feature->set("hessianThreshold", 100);
+		feature->set("hessianThreshold",50);
 		feature->set("nOctaveLayers", 4);
 		feature->set("nOctaves", 3);
 		feature->set("upright", 0);
@@ -518,20 +523,20 @@ int main(int argc, char** argv) {
 		cap >> object;
 		frame_num++;
 		printf("\nframe=%d\n", frame_num);
-
-		cv::Laplacian(object, tmp_img, CV_32F, 1, 1);
-		//Canny(cvarrToMat(objectc), sobel_img,50,100);
-		cv::convertScaleAbs(tmp_img, sobel_img, 1, 0);
+		//cvtColor(object, gray_image, CV_RGB2GRAY);
+		//cv::Laplacian(gray_image, tmp_img, CV_16S,3);
+		Canny(object, sobel_img,50,100);
+		//cv::convertScaleAbs(tmp_img, sobel_img, 1, 0);
 
 		// 縦横１０分割したエッジ画像の各ヒストグラムの領域確保
 		for (int i = 0; i < 100; i++)
-			hist_image.push_back(Mat(200, 260, CV_8U, cv::Scalar(255)));
+			hist_image.push_back(Mat(200, 260+128, CV_8U, cv::Scalar(255)));
 
 		// ヒストグラム画像を作成
 		get_histimage(sobel_img, hist_image.data());
 
 		// 各ヒストグラムを順次表示
-		cvNamedWindow("Histogram", CV_WINDOW_AUTOSIZE);
+		//cvNamedWindow("Histogram", CV_WINDOW_AUTOSIZE);
 		for (int i = 0; i < 100; i++) {
 			//imshow("Histogram", hist_image[i]);
 			ss << "img/hist_img_" << frame_num << "_" << i << ".jpg";
