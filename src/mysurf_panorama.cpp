@@ -150,7 +150,8 @@ void get_histimage(Mat image, Mat *hist_image) {
 			double max_value;
 			int bin_w;
 			Mat tmp_img(image, cv::Rect(j * 128, i * 72, 128, 72));
-			calcHist(&tmp_img, 1,	channels, Mat(), hist, dims, histSize, range, true, false);
+			calcHist(&tmp_img, 1, channels, Mat(), hist, dims, histSize, range,
+					true, false);
 
 			meanStdDev(hist, mean, dev);
 			count.at<float> (i, j) = dev[0];
@@ -175,11 +176,11 @@ void get_histimage(Mat image, Mat *hist_image) {
 			for (int k = 0; k < 256; k++)
 				rectangle(hist_image[i * 10 + j], Point(k * bin_w, hist_image[i
 						* 10 + j].rows), cvPoint((k + 1) * bin_w, hist_image[i
-						* 10 + j].rows - cvRound(hist.at<float>(k))),
+						* 10 + j].rows - cvRound(hist.at<float> (k))),
 						cvScalarAll(0), -1, 8, 0);
 			roi_rect.width = tmp_img.cols;
 			roi_rect.height = tmp_img.rows;
-			roi_rect.x=260;
+			roi_rect.x = 260;
 			Mat roi(hist_image[i * 10 + j], roi_rect);
 			tmp_img.copyTo(roi);
 		}
@@ -211,6 +212,80 @@ void make_pano(Mat src, Mat dst, Mat mask, Mat roi) {
 						mask.at<unsigned char> (j, i) = roi.at<unsigned char> (
 								j, i);
 				}
+			}
+		}
+	}
+}
+/*
+ * @Param descriptors1 特徴量１
+ * @Param descriptors2 特徴量２
+ * @Param key1         特徴点１
+ * @Param key2         特徴点２
+ * @Param matches      良いマッチングの格納先
+ * @Param pt1          良いマッチングの特徴点座標１
+ * @Param pt2          良いマッチングの特徴点座標２
+ */
+void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
+		vector<KeyPoint> *key2, std::vector<cv::DMatch> *matches,
+		vector<Point2f> *pt1, vector<Point2f> *pt2) {
+
+	FlannBasedMatcher matcher;
+	vector<std::vector<cv::DMatch> > matches12, matches21;
+	std::vector<cv::DMatch> tmp_matches;
+	int knn = 1;
+	//BFMatcher matcher(cv::NORM_HAMMING, true);
+	//matcher.match(objectDescriptors, imageDescriptors, matches);
+
+	cout << key1->size() << endl;
+
+	matcher.knnMatch(descriptors1,descriptors2, matches21, knn);
+	matcher.knnMatch(descriptors2, descriptors1, matches12, knn);
+	tmp_matches.clear();
+	// KNN探索で，1->2と2->1が一致するものだけがマッチしたとみなされる
+	for (size_t m = 0; m < matches12.size(); m++) {
+		bool findCrossCheck = false;
+		for (size_t fk = 0; fk < matches12[m].size(); fk++) {
+			cv::DMatch forward = matches12[m][fk];
+			for (size_t bk = 0; bk < matches21[forward.trainIdx].size(); bk++) {
+				cv::DMatch backward = matches21[forward.trainIdx][bk];
+				if (backward.trainIdx == forward.queryIdx) {
+					tmp_matches.push_back(forward);
+					findCrossCheck = true;
+					break;
+				}
+			}
+			if (findCrossCheck)
+				break;
+		}
+	}
+	cout << "matches : " << tmp_matches.size() << endl;
+	double min_dist = DBL_MAX;
+	for (int i = 0; i < (int) tmp_matches.size(); i++) {
+		double dist = tmp_matches[i].distance;
+		if (dist < min_dist)
+			min_dist = dist;
+	}
+
+	cout << "min dist :" << min_dist << endl;
+
+	//  対応点間の移動距離による良いマッチングの取捨選択
+	matches->clear();
+	pt1->clear();
+	pt2->clear();
+	for (int i = 0; i < (int) tmp_matches.size(); i++) {
+		if (round((*key1)[tmp_matches[i].queryIdx].class_id) == round(
+				(*key2)[tmp_matches[i].trainIdx].class_id)) {
+			if (tmp_matches[i].distance > 0 && tmp_matches[i].distance < (min_dist)*3) {
+				//		  &&	(fabs(objectKeypoints[matches[i].queryIdx].pt.y - imageKeypoints[matches[i].trainIdx].pt.y)
+				//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
+
+				matches->push_back(tmp_matches[i]);
+				pt1->push_back((*key2)[tmp_matches[i].queryIdx].pt);
+				pt2->push_back((*key1)[tmp_matches[i].trainIdx].pt);
+				//good_objectKeypoints.push_back(
+				//		objectKeypoints[tmp_matches[i].queryIdx]);
+				//good_imageKeypoints.push_back(
+				//		imageKeypoints[tmp_matches[i].trainIdx]);
 			}
 		}
 	}
@@ -274,9 +349,6 @@ int main(int argc, char** argv) {
 	// ORB
 	//ORB featur;
 
-	// 特徴点のマッチャー（ユークリッド距離とハミング距離で使用する関数を変える）
-	FlannBasedMatcher matcher;
-	//BFMatcher matcher(cv::NORM_HAMMING, true);
 
 	// 対応点の対の格納先
 	std::vector<cv::DMatch> matches; // matcherにより求めたおおまかな対を格納
@@ -287,10 +359,9 @@ int main(int argc, char** argv) {
 	vector<Point2f> pt1, pt2; // 画像対における特徴点座の集合
 
 	// より良いペアの格納先
-	double min_dist = DBL_MAX;
 	std::vector<cv::DMatch> good_matches;
-	std::vector<KeyPoint> good_objectKeypoints;
-	std::vector<KeyPoint> good_imageKeypoints;
+	std::vector<KeyPoint> good_objectKeypoints, good_imageKeypoints;
+	Mat good_objectDescriptors, good_imageDescriptors;
 
 	Mat homography = Mat(3, 3, CV_64FC1); // 画像対におけるホモグラフィ
 	Mat h_base = cv::Mat::eye(3, 3, CV_64FC1); // パノラマ平面へのホモグラフィ
@@ -423,7 +494,7 @@ int main(int argc, char** argv) {
 	feature = Feature2D::create(algorithm_type);
 	if (algorithm_type.compare("SURF") == 0) {
 		feature->set("extended", 1);
-		feature->set("hessianThreshold",50);
+		feature->set("hessianThreshold", 50);
 		feature->set("nOctaveLayers", 4);
 		feature->set("nOctaves", 3);
 		feature->set("upright", 0);
@@ -518,120 +589,72 @@ int main(int argc, char** argv) {
 		blur_skip = 0;
 	else
 		blur_skip = FRAME_T;
+	bool f_hist = false;
 	while (frame_num < end && frame_num < FRAME_MAX + FRAME_T + 1) {
 		//while(dev[0] < blur){
 		cap >> object;
 		frame_num++;
 		printf("\nframe=%d\n", frame_num);
-		//cvtColor(object, gray_image, CV_RGB2GRAY);
-		//cv::Laplacian(gray_image, tmp_img, CV_16S,3);
-		Canny(object, sobel_img,50,100);
+		cvtColor(object, gray_image, CV_RGB2GRAY);
+		//cv::Laplacian(gray_image, tmp_img, CV_16S, 3);
+		Canny(object, sobel_img, 50, 200);
+		//cv::Sobel(gray_image, tmp_img, CV_32F, 1, 1);
 		//cv::convertScaleAbs(tmp_img, sobel_img, 1, 0);
 
 		// 縦横１０分割したエッジ画像の各ヒストグラムの領域確保
-		for (int i = 0; i < 100; i++)
-			hist_image.push_back(Mat(200, 260+128, CV_8U, cv::Scalar(255)));
+		if (f_hist) {
+			for (int i = 0; i < 100; i++)
+				hist_image.push_back(
+						Mat(200, 260 + 128, CV_8U, cv::Scalar(255)));
 
-		// ヒストグラム画像を作成
-		get_histimage(sobel_img, hist_image.data());
+			// ヒストグラム画像を作成
+			get_histimage(sobel_img, hist_image.data());
 
-		// 各ヒストグラムを順次表示
-		//cvNamedWindow("Histogram", CV_WINDOW_AUTOSIZE);
-		for (int i = 0; i < 100; i++) {
-			//imshow("Histogram", hist_image[i]);
-			ss << "img/hist_img_" << frame_num << "_" << i << ".jpg";
-			imwrite(ss.str(), hist_image[i]);
+			// 各ヒストグラムを順次表示
+			//cvNamedWindow("Histogram", CV_WINDOW_AUTOSIZE);
+			for (int i = 0; i < 100; i++) {
+				//imshow("Histogram", hist_image[i]);
+				ss << "img/hist_img_" << frame_num << "_" << i << ".jpg";
+				imwrite(ss.str(), hist_image[i]);
+				ss.clear();
+				ss.str("");
+				//cvWaitKey(0);
+			}
+
+			// if(count < blur){
+			ss << "img/img_" << frame_num << ".jpg";
+			std::cout << ss.str();
+			imwrite(ss.str(), image);
 			ss.clear();
 			ss.str("");
-			//cvWaitKey(0);
+
+			ss << "img/sobel_img_" << frame_num << ".jpg";
+			std::cout << ss.str();
+			imwrite(ss.str(), sobel_img);
+			ss.clear();
+			ss.str("");
+			//img_num++;
+			//count = 0;
+			//std::cout << "skip frame : " << frame_num << std::endl;
+			// }
 		}
-
-		// if(count < blur){
-		ss << "img/img_" << frame_num << ".jpg";
-		std::cout << ss.str();
-		imwrite(ss.str(), image);
-		ss.clear();
-		ss.str("");
-
-		ss << "img/sobel_img_" << frame_num << ".jpg";
-		std::cout << ss.str();
-		imwrite(ss.str(), sobel_img);
-		ss.clear();
-		ss.str("");
-		//img_num++;
-		//count = 0;
-		//std::cout << "skip frame : " << frame_num << std::endl;
-		// }
-
 
 		cvtColor(object, gray_image, CV_RGB2GRAY);
 		feature->operator ()(gray_image, Mat(), objectKeypoints,
 				objectDescriptors);
 
-		//		matcher.match(objectDescriptors, imageDescriptors, matches);
-		std::vector<std::vector<cv::DMatch> > matches12, matches21;
-		int knn = 1;
-		matcher.knnMatch(imageDescriptors, objectDescriptors, matches21, knn);
-		matcher.knnMatch(objectDescriptors, imageDescriptors, matches12, knn);
-		matches.clear();
-		// KNN探索で，1->2と2->1が一致するものだけがマッチしたとみなされる
-		for (size_t m = 0; m < matches12.size(); m++) {
-			bool findCrossCheck = false;
-			for (size_t fk = 0; fk < matches12[m].size(); fk++) {
-				cv::DMatch forward = matches12[m][fk];
-				for (size_t bk = 0; bk < matches21[forward.trainIdx].size(); bk++) {
-					cv::DMatch backward = matches21[forward.trainIdx][bk];
-					if (backward.trainIdx == forward.queryIdx) {
-						matches.push_back(forward);
-						findCrossCheck = true;
-						break;
-					}
-				}
-				if (findCrossCheck)
-					break;
-			}
-		}
-		cout << "matches : " << matches.size() << endl;
+		good_matcher(imageDescriptors, objectDescriptors, &imageKeypoints,
+											&objectKeypoints, &matches, &pt1, &pt2);
 
-		for (int i = 0; i < (int) matches.size(); i++) {
-			double dist = matches[i].distance;
-			if (dist < min_dist)
-				min_dist = dist;
-		}
-
-		cout << "min dist :" << min_dist << endl;
-
-		//  対応点間の移動距離による良いマッチングの取捨選択
-		good_matches.clear();
-		pt1.clear();
-		pt2.clear();
-		for (int i = 0; i < (int) matches.size(); i++) {
-			if (round(objectKeypoints[matches[i].queryIdx].class_id) == round(
-					imageKeypoints[matches[i].trainIdx].class_id)) {
-				if (matches[i].distance > 0 && matches[i].distance < 2
-						* (min_dist + 1)) {
-					//		  &&	(fabs(objectKeypoints[matches[i].queryIdx].pt.y - imageKeypoints[matches[i].trainIdx].pt.y)
-					//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
-
-					good_matches.push_back(matches[i]);
-					pt1.push_back(objectKeypoints[matches[i].queryIdx].pt);
-					pt2.push_back(imageKeypoints[matches[i].trainIdx].pt);
-					good_objectKeypoints.push_back(
-							objectKeypoints[matches[i].queryIdx]);
-					good_imageKeypoints.push_back(
-							imageKeypoints[matches[i].trainIdx]);
-				}
-			}
-		}
-
+		cout << "selected good_matches : " << pt1.size() << endl;
 		// マッチング結果をリサイズして表示
 		Mat result, r_result;
-		drawMatches(object, objectKeypoints, image, imageKeypoints,
-				good_matches, result);
+		drawMatches(object, objectKeypoints, image, imageKeypoints, matches,
+				result);
 		resize(result, r_result, Size(), 0.5, 0.5, INTER_LANCZOS4);
 		namedWindow("matches", CV_WINDOW_AUTOSIZE);
 		imshow("matches", r_result);
-		waitKey(30);
+		waitKey(0);
 
 		imageKeypoints = objectKeypoints;
 		objectDescriptors.copyTo(imageDescriptors);
@@ -695,8 +718,8 @@ int main(int argc, char** argv) {
 
 		n = pt1.size();
 		printf("n = %d\n", n);
-		printf("num_of_obj = %d\n", good_objectKeypoints.size());
-		printf("num_of_img = %d\n", good_imageKeypoints.size());
+		printf("num_of_obj = %d\n", pt1.size());
+		printf("num_of_img = %d\n", pt2.size());
 		if (n >= 4) {
 			homography = findHomography(Mat(pt1), Mat(pt2), CV_RANSAC, 5.0);
 		} else {
