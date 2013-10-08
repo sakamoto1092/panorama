@@ -11,7 +11,8 @@
 #include <vector>
 #include <fstream>
 #include <boost/program_options.hpp>
-
+#define PANO_W 6000
+#define PANO_H 3000
 using namespace std;
 using namespace cv;
 using boost::program_options::options_description;
@@ -226,8 +227,8 @@ void make_pano(Mat src, Mat dst, Mat mask, Mat roi) {
  * @Param pt2          良いマッチングの特徴点座標２
  */
 void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
-		vector<KeyPoint> *key2, std::vector<cv::DMatch> *matches,
-		vector<Point2f> *pt1, vector<Point2f> *pt2) {
+		vector<KeyPoint> *key2, std::vector<cv::DMatch> *matches, vector<
+				Point2f> *pt1, vector<Point2f> *pt2) {
 
 	FlannBasedMatcher matcher;
 	vector<std::vector<cv::DMatch> > matches12, matches21;
@@ -238,7 +239,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 
 	cout << key1->size() << endl;
 
-	matcher.knnMatch(descriptors1,descriptors2, matches21, knn);
+	matcher.knnMatch(descriptors1, descriptors2, matches21, knn);
 	matcher.knnMatch(descriptors2, descriptors1, matches12, knn);
 	tmp_matches.clear();
 	// KNN探索で，1->2と2->1が一致するものだけがマッチしたとみなされる
@@ -275,7 +276,8 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 	for (int i = 0; i < (int) tmp_matches.size(); i++) {
 		if (round((*key1)[tmp_matches[i].queryIdx].class_id) == round(
 				(*key2)[tmp_matches[i].trainIdx].class_id)) {
-			if (tmp_matches[i].distance > 0 && tmp_matches[i].distance < (min_dist)*3) {
+			if (tmp_matches[i].distance > 0 && tmp_matches[i].distance
+					< (min_dist ) * 3) {
 				//		  &&	(fabs(objectKeypoints[matches[i].queryIdx].pt.y - imageKeypoints[matches[i].trainIdx].pt.y)
 				//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
 
@@ -370,7 +372,7 @@ int main(int argc, char** argv) {
 	// パノラマ平面の構成
 	int roll = 0;
 	int pitch = 0;
-	int yaw = 30;
+	int yaw = 0;
 	Mat A1Matrix = cv::Mat::eye(3, 3, CV_64FC1);
 	Mat A2Matrix = cv::Mat::eye(3, 3, CV_64FC1);
 
@@ -379,14 +381,20 @@ int main(int argc, char** argv) {
 	Mat yawMatrix = cv::Mat::eye(3, 3, CV_64FC1);
 
 	//　パノラマ平面への射影行列の作成
-	A1Matrix.at<double> (0, 2) = -640;
-	A1Matrix.at<double> (1, 2) = -360;
-	A1Matrix.at<double> (2, 2) = 1080;
+	//	A1Matrix.at<double> (0, 2) = -640;
+	//	A1Matrix.at<double> (1, 2) = -360;
+	//	A1Matrix.at<double> (2, 2) = 1080;
 
-	A2Matrix.at<double> (0, 0) = 290;
-	A2Matrix.at<double> (1, 1) = 290;
-	A2Matrix.at<double> (0, 2) = 640;
-	A2Matrix.at<double> (1, 2) = 360;
+	A1Matrix.at<double> (0, 0) = 1.1107246554597004e-003;
+	A1Matrix.at<double> (0, 2) = -7.0476759105087217e-001;
+	A1Matrix.at<double> (1, 1) = 1.0937849972977411e-003;
+	A1Matrix.at<double> (1, 2) = -4.2040554903081440e-001;
+
+	cout << A1Matrix.inv() << endl;
+	A2Matrix.at<double> (0, 0) = 900;
+	A2Matrix.at<double> (1, 1) = 900;
+	A2Matrix.at<double> (0, 2) = PANO_W / 2;
+	A2Matrix.at<double> (1, 2) = PANO_H / 2;
 
 	try {
 		// コマンドラインオプションの定義
@@ -552,14 +560,15 @@ int main(int argc, char** argv) {
 	//  パノラマ平面へ射影する際のマスク処理
 	w = image.cols;
 	h = image.rows;
-	mask = Mat(h, w, CV_8U, cv::Scalar(0));
-	pano_black = Mat(h, w, CV_8U, cv::Scalar(0));
+	mask = Mat(PANO_H, PANO_W, CV_8U, cv::Scalar(0));
+	pano_black = Mat(PANO_H, PANO_W, CV_8U, cv::Scalar(0));
 	white_img = Mat(image.rows, image.cols, CV_8U, cv::Scalar(255));
+	transform_image2 = cv::Mat::zeros(Size(PANO_W, PANO_H), CV_8UC3);
 
 	// 特徴点の検出と特徴量の記述
 	feature->operator ()(gray_image, Mat(), imageKeypoints, imageDescriptors);
 
-	warpPerspective(image, transform_image2, h_base, image.size()); // 先頭フレームをパノラマ平面へ投影
+	warpPerspective(image, transform_image2, h_base, Size(PANO_W, PANO_H)); // 先頭フレームをパノラマ平面へ投影
 
 
 	// パノラマ動画ファイルを作成
@@ -590,6 +599,7 @@ int main(int argc, char** argv) {
 	else
 		blur_skip = FRAME_T;
 	bool f_hist = false;
+	namedWindow("Object Correspond", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
 	while (frame_num < end && frame_num < FRAME_MAX + FRAME_T + 1) {
 		//while(dev[0] < blur){
 		cap >> object;
@@ -644,7 +654,7 @@ int main(int argc, char** argv) {
 				objectDescriptors);
 
 		good_matcher(imageDescriptors, objectDescriptors, &imageKeypoints,
-											&objectKeypoints, &matches, &pt1, &pt2);
+				&objectKeypoints, &matches, &pt1, &pt2);
 
 		cout << "selected good_matches : " << pt1.size() << endl;
 		// マッチング結果をリサイズして表示
@@ -652,9 +662,9 @@ int main(int argc, char** argv) {
 		drawMatches(object, objectKeypoints, image, imageKeypoints, matches,
 				result);
 		resize(result, r_result, Size(), 0.5, 0.5, INTER_LANCZOS4);
-		namedWindow("matches", CV_WINDOW_AUTOSIZE);
+		namedWindow("matches", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
 		imshow("matches", r_result);
-		waitKey(0);
+		waitKey(30);
 
 		imageKeypoints = objectKeypoints;
 		objectDescriptors.copyTo(imageDescriptors);
@@ -734,10 +744,10 @@ int main(int argc, char** argv) {
 
 		h_base = h_base * homography;
 
-		warpPerspective(object, transform_image, h_base, object.size());
+		warpPerspective(object, transform_image, h_base, Size(PANO_W, PANO_H));
 
 		Mat h2 = h_base;
-		warpPerspective(white_img, pano_black, h2, white_img.size(),
+		warpPerspective(white_img, pano_black, h2, Size(PANO_W, PANO_H),
 				CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
 
 		make_pano(transform_image, transform_image2, mask, pano_black);
@@ -748,8 +758,21 @@ int main(int argc, char** argv) {
 		ss.clear();
 		ss.str("");
 
-		if (f_video)
-			VideoWriter.write(transform_image);
+		if (f_video) {
+			Mat movie(h, w, CV_8UC3, Scalar::all(0));
+			Mat tmp;
+			Rect roi;
+			double fx = (double) w / (double) transform_image.cols;
+			double fy = (double) h / (double) transform_image.rows;
+			double f = fx < fy ? fx : fy;
+			roi.width = (double)  transform_image.cols * f;
+			roi.height = (double)  transform_image.rows * f;
+			roi.y = ((double)h - (double)transform_image.rows * f) / 2.0;
+			Mat roi_movie(movie, roi);
+			resize(transform_image, roi_movie, cv::Size(0, 0), f, f);
+			//tmp.copyTo(roi_movie);
+			VideoWriter.write(movie);
+		}
 
 		imshow("Object Correspond", transform_image2);
 		waitKey(30);
@@ -761,7 +784,6 @@ int main(int argc, char** argv) {
 		}
 	}
 
-	namedWindow("Object Correspond", CV_WINDOW_AUTOSIZE);
 	imshow("Object Correspond", transform_image2);
 	cout << "finished making the panorama" << endl;
 	waitKey(0);
