@@ -762,7 +762,6 @@ int main(int argc, char** argv) {
 
 		cv::Mat tmp = homography.clone();
 		out_Hmat << tmp << endl;
-
 		h_base = h_base * homography;
 
 		warpPerspective(object, transform_image, h_base, Size(PANO_W, PANO_H));
@@ -783,12 +782,13 @@ int main(int argc, char** argv) {
 
 
 
-		write(cvfs, "frame" ,(int)frame_num);
+		//write(cvfs, "frame" ,(int)frame_num);
 		//cv::WriteStructContext ws(cvfs, ss.str(), CV_NODE_SEQ);
-		write(cvfs,  "homo",h_base);
-		//cvfs << ss.str() << h_base;
-		//ss.clear();
-		//ss.str("");
+		ss << "homo_" << frame_num;
+		write(cvfs,  ss.str(),h_base);
+
+		ss.clear();
+		ss.str("");
 
 		//imwrite(ss.str(),pano_black);
 
