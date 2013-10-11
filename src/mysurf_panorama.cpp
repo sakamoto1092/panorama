@@ -277,7 +277,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 		if (round((*key1)[tmp_matches[i].queryIdx].class_id) == round(
 				(*key2)[tmp_matches[i].trainIdx].class_id)) {
 			if (tmp_matches[i].distance > 0 && tmp_matches[i].distance
-					< (min_dist ) * 3) {
+					< (min_dist + 1) * 3) {
 				//		  &&	(fabs(objectKeypoints[matches[i].queryIdx].pt.y - imageKeypoints[matches[i].trainIdx].pt.y)
 				//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
 
@@ -297,6 +297,7 @@ int main(int argc, char** argv) {
 
 	VideoWriter VideoWriter; // パノラマ動画
 	VideoCapture cap; // ビデオファイル
+
 
 	// 動画から取得した各種画像の格納先
 	Mat image; // 投影先の画像
@@ -325,7 +326,7 @@ int main(int argc, char** argv) {
 	bool f_center = false; // センターサークル中心
 	bool f_video = false; // ビデオ書き出し
 
-	float fps = 30; // 書き出しビデオのfps
+	float fps = 20; // 書き出しビデオのfps
 	string n_video; // 書き出しビデオファイル名
 	string cam_data; // 映像センサファイル名
 	string n_center; // センターサークル画像名
@@ -372,7 +373,7 @@ int main(int argc, char** argv) {
 	// パノラマ平面の構成
 	int roll = 0;
 	int pitch = 0;
-	int yaw = 0;
+	int yaw = -10;
 	Mat A1Matrix = cv::Mat::eye(3, 3, CV_64FC1);
 	Mat A2Matrix = cv::Mat::eye(3, 3, CV_64FC1);
 
@@ -502,7 +503,7 @@ int main(int argc, char** argv) {
 	feature = Feature2D::create(algorithm_type);
 	if (algorithm_type.compare("SURF") == 0) {
 		feature->set("extended", 1);
-		feature->set("hessianThreshold", 50);
+		feature->set("hessianThreshold", 100);
 		feature->set("nOctaveLayers", 4);
 		feature->set("nOctaves", 3);
 		feature->set("upright", 0);
@@ -599,18 +600,38 @@ int main(int argc, char** argv) {
 	else
 		blur_skip = FRAME_T;
 	bool f_hist = false;
-	namedWindow("Object Correspond", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
-	while (frame_num < end && frame_num < FRAME_MAX + FRAME_T + 1) {
-		//while(dev[0] < blur){
-		cap >> object;
-		frame_num++;
-		printf("\nframe=%d\n", frame_num);
-		cvtColor(object, gray_image, CV_RGB2GRAY);
-		//cv::Laplacian(gray_image, tmp_img, CV_16S, 3);
-		Canny(object, sobel_img, 50, 200);
-		//cv::Sobel(gray_image, tmp_img, CV_32F, 1, 1);
-		//cv::convertScaleAbs(tmp_img, sobel_img, 1, 0);
+	bool f_blur = true;
+	long count_blur = 500;
 
+	namedWindow("Object Correspond", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
+	FileStorage cvfs("aria_H.xml", cv::FileStorage::WRITE);
+	while (frame_num < end && frame_num < FRAME_MAX + FRAME_T + 1) {
+
+		while (f_blur) {
+			cap >> object;
+			frame_num++;
+			printf("\nframe=%d\n", frame_num);
+			cvtColor(object, gray_image, CV_RGB2GRAY);
+			//cv::Laplacian(gray_image, tmp_img, CV_16S, 3);
+			//Canny(object, sobel_img, 50, 200);
+			cv::Sobel(gray_image, tmp_img, CV_32F, 1, 1);
+			cv::convertScaleAbs(tmp_img, sobel_img, 1, 0);
+
+			cv::Mat_<float>::iterator it = sobel_img.begin<float> ();
+			long count = 0;
+			for (; it != sobel_img.end<float> (); ++it) {
+				if ((*it) > 150)
+					count++;
+			}
+			cout << "edge : " << count << endl;
+			if (count > count_blur)
+				f_blur = false;
+			count = 0;
+		}
+
+		f_blur = true;
+		if (object.empty())
+			break;
 		// 縦横１０分割したエッジ画像の各ヒストグラムの領域確保
 		if (f_hist) {
 			for (int i = 0; i < 100; i++)
@@ -758,6 +779,20 @@ int main(int argc, char** argv) {
 		ss.clear();
 		ss.str("");
 
+		// 合成に使ったフレームのホモグラフィ行列とフレーム番号を記録
+
+
+
+		write(cvfs, "frame" ,(int)frame_num);
+		//cv::WriteStructContext ws(cvfs, ss.str(), CV_NODE_SEQ);
+		write(cvfs,  "homo",h_base);
+		//cvfs << ss.str() << h_base;
+		//ss.clear();
+		//ss.str("");
+
+		//imwrite(ss.str(),pano_black);
+
+
 		if (f_video) {
 			Mat movie(h, w, CV_8UC3, Scalar::all(0));
 			Mat tmp;
@@ -765,9 +800,9 @@ int main(int argc, char** argv) {
 			double fx = (double) w / (double) transform_image.cols;
 			double fy = (double) h / (double) transform_image.rows;
 			double f = fx < fy ? fx : fy;
-			roi.width = (double)  transform_image.cols * f;
-			roi.height = (double)  transform_image.rows * f;
-			roi.y = ((double)h - (double)transform_image.rows * f) / 2.0;
+			roi.width = (double) transform_image.cols * f;
+			roi.height = (double) transform_image.rows * f;
+			roi.y = ((double) h - (double) transform_image.rows * f) / 2.0;
 			Mat roi_movie(movie, roi);
 			resize(transform_image, roi_movie, cv::Size(0, 0), f, f);
 			//tmp.copyTo(roi_movie);
@@ -788,6 +823,7 @@ int main(int argc, char** argv) {
 	cout << "finished making the panorama" << endl;
 	waitKey(0);
 	imwrite("transform4.jpg", transform_image2);
+	imwrite("mask.jpg", mask);
 
 	return 0;
 }
