@@ -280,7 +280,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 					< (min_dist + 1) * 3) {
 				//		  &&	(fabs(objectKeypoints[matches[i].queryIdx].pt.y - imageKeypoints[matches[i].trainIdx].pt.y)
 				//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
-
+				//				cout << "i : " << i << endl;
 				matches->push_back(tmp_matches[i]);
 				pt1->push_back((*key2)[tmp_matches[i].queryIdx].pt);
 				pt2->push_back((*key1)[tmp_matches[i].trainIdx].pt);
@@ -373,7 +373,7 @@ int main(int argc, char** argv) {
 	// パノラマ平面の構成
 	int roll = 0;
 	int pitch = 0;
-	int yaw = -10;
+	int yaw = -20;
 	Mat A1Matrix = cv::Mat::eye(3, 3, CV_64FC1);
 	Mat A2Matrix = cv::Mat::eye(3, 3, CV_64FC1);
 
@@ -386,16 +386,18 @@ int main(int argc, char** argv) {
 	//	A1Matrix.at<double> (1, 2) = -360;
 	//	A1Matrix.at<double> (2, 2) = 1080;
 
+	// GCの内部パラメータの逆行列
 	A1Matrix.at<double> (0, 0) = 1.1107246554597004e-003;
 	A1Matrix.at<double> (0, 2) = -7.0476759105087217e-001;
 	A1Matrix.at<double> (1, 1) = 1.0937849972977411e-003;
 	A1Matrix.at<double> (1, 2) = -4.2040554903081440e-001;
+	cout << "<A1>" << endl << A1Matrix.inv() << endl;
 
-	cout << A1Matrix.inv() << endl;
 	A2Matrix.at<double> (0, 0) = 900;
 	A2Matrix.at<double> (1, 1) = 900;
 	A2Matrix.at<double> (0, 2) = PANO_W / 2;
 	A2Matrix.at<double> (1, 2) = PANO_H / 2;
+	cout << "<A2>" << endl << A2Matrix << endl;
 
 	try {
 		// コマンドラインオプションの定義
@@ -519,7 +521,7 @@ int main(int argc, char** argv) {
 	// 最終的なパノラマ平面へのホモグラフィ行列を計算
 	h_base = A2Matrix * rollMatrix * pitchMatrix * yawMatrix * A1Matrix;
 
-	cout << h_base << endl;
+	cout << "<h_base>" << endl << h_base << endl;
 
 	/*logging*/
 	ofstream log("composition_log.txt");
@@ -539,10 +541,13 @@ int main(int argc, char** argv) {
 	log << f_comp << endl;
 	log << "<use center>" << endl;
 	if (center_img.empty())
-		log << 1 << endl;
-	else
 		log << 0 << endl;
+	else
+		log << 1 << endl;
 	log << "<deblur>" << endl << blur << endl;
+	log << "<start>" << endl << skip << endl;
+	log << "<end>" << endl << end << endl;
+	log << "<inter>" << endl << FRAME_T << endl;
 	log << "<Algorithm> " << endl << algorithm_type << endl;
 	log << "<Algorithm Param>" << endl;
 	for (int ii = 0; ii < v_log_str.size(); ii++)
@@ -555,12 +560,27 @@ int main(int argc, char** argv) {
 	else
 		cap >> image;
 
+	/*
+	 Mat	dist =	(Mat_<double> (1, 5) << 4.0557296604988635e-002, -7.0495680844213993e-001, 1.4154080043873203e-002, -2.7104946840592046e-003, 2.9299467217460284e+000);
+	 cout << "dist param : " << dist << endl;
+	 w = image.cols;
+	 h = image.rows;
+	 //CvArr cvimage = image;
+	 IplImage dist_img = image;
+	 IplImage *undist_img = cvCreateImage(cvSize(w, h), 8, 3);
+	 Mat inv_a1 = A1Matrix.inv();
+	 CvMat a1 = inv_a1;
+	 CvMat cvdist(dist);
+	 cvUndistort2(&dist_img, undist_img, &a1, &(CvMat) dist);
+
+	 Mat dist_src = image.clone();
+	 //undistort(dist_src, image, A1Matrix.inv(), dist);
+	 */
 	cvtColor(image, gray_image, CV_RGB2GRAY);
 
 	// マスクイメージ関係を生成
 	//  パノラマ平面へ射影する際のマスク処理
-	w = image.cols;
-	h = image.rows;
+
 	mask = Mat(PANO_H, PANO_W, CV_8U, cv::Scalar(0));
 	pano_black = Mat(PANO_H, PANO_W, CV_8U, cv::Scalar(0));
 	white_img = Mat(image.rows, image.cols, CV_8U, cv::Scalar(255));
@@ -601,7 +621,7 @@ int main(int argc, char** argv) {
 		blur_skip = FRAME_T;
 	bool f_hist = false;
 	bool f_blur = true;
-	long count_blur = 500;
+	long count_blur = 100;
 
 	namedWindow("Object Correspond", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
 	FileStorage cvfs("aria_H.xml", cv::FileStorage::WRITE);
@@ -624,7 +644,7 @@ int main(int argc, char** argv) {
 					count++;
 			}
 			cout << "edge : " << count << endl;
-			if (count > count_blur)
+			if (count > blur)
 				f_blur = false;
 			count = 0;
 		}
@@ -669,6 +689,21 @@ int main(int argc, char** argv) {
 			//std::cout << "skip frame : " << frame_num << std::endl;
 			// }
 		}
+
+		// 歪み補正
+		//Mat	dist =	(Mat_<double> (1, 5) << 4.0557296604988635e-002, -7.0495680844213993e-001, 1.4154080043873203e-002, -2.7104946840592046e-003, 2.9299467217460284e+000);
+		//Mat dist_src = object.clone();
+
+		//dist_img = object.clone();
+		//IplImage *undist_img = cvCreateImage(cvSize(w, h), 8, 3);
+		//Mat inv_a1 = A1Matrix.inv();
+		//CvMat a1 = inv_a1;
+		//CvMat cvdist(dist);
+
+		//cvUndistort2(&dist_img, undist_img, &a1, &(CvMat) dist);
+
+		//undistort(dist_src, object, A1Matrix.inv(), dist);
+		//object = cvarrToMat(undist_img);
 
 		cvtColor(object, gray_image, CV_RGB2GRAY);
 		feature->operator ()(gray_image, Mat(), objectKeypoints,
@@ -758,7 +793,7 @@ int main(int argc, char** argv) {
 			printf("frame_num = %d\n", frame_num);
 		}
 
-		cout << Mat(pt1) << endl;
+		//cout << Mat(pt1) << endl;
 
 		cv::Mat tmp = homography.clone();
 		out_Hmat << tmp << endl;
@@ -779,19 +814,17 @@ int main(int argc, char** argv) {
 		ss.str("");
 
 		// 合成に使ったフレームのホモグラフィ行列とフレーム番号を記録
-
-
-
 		//write(cvfs, "frame" ,(int)frame_num);
 		//cv::WriteStructContext ws(cvfs, ss.str(), CV_NODE_SEQ);
 		ss << "homo_" << frame_num;
-		write(cvfs,  ss.str(),h_base);
-
+		write(cvfs, ss.str(), h_base);
 		ss.clear();
 		ss.str("");
 
-		//imwrite(ss.str(),pano_black);
-
+		ss << "img/frame_" << frame_num << ".jpg";
+		imwrite(ss.str(), object);
+		ss.clear();
+		ss.str("");
 
 		if (f_video) {
 			Mat movie(h, w, CV_8UC3, Scalar::all(0));
@@ -804,7 +837,7 @@ int main(int argc, char** argv) {
 			roi.height = (double) transform_image.rows * f;
 			roi.y = ((double) h - (double) transform_image.rows * f) / 2.0;
 			Mat roi_movie(movie, roi);
-			resize(transform_image, roi_movie, cv::Size(0, 0), f, f);
+			resize(transform_image2, roi_movie, cv::Size(0, 0), f, f);
 			//tmp.copyTo(roi_movie);
 			VideoWriter.write(movie);
 		}
