@@ -277,7 +277,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 		if (round((*key1)[tmp_matches[i].queryIdx].class_id) == round(
 				(*key2)[tmp_matches[i].trainIdx].class_id)) {
 			if (tmp_matches[i].distance > 0 && tmp_matches[i].distance
-					< (min_dist + 1) * 3) {
+					< (min_dist) * 3) {
 				//		  &&	(fabs(objectKeypoints[matches[i].queryIdx].pt.y - imageKeypoints[matches[i].trainIdx].pt.y)
 				//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
 				//				cout << "i : " << i << endl;
@@ -339,6 +339,14 @@ int main(int argc, char** argv) {
 
 	// 全ホモグラフィ行列をアウトプット
 	std::ofstream out_Hmat("mat_homography.txt", std::ios::out);
+	// 手ブレ検出用各種変数
+	int img_num = 0;
+	stringstream ss; // 書き出しファイル名
+	cv::Mat tmp_img; //
+	cv::Mat sobel_img; // エッジ画像格納先
+
+	vector<Mat> hist_image;
+	int blur_skip;
 
 	// 各種アルゴリズムによる特徴点検出および特徴量記述
 	string algorithm_type;
@@ -373,7 +381,7 @@ int main(int argc, char** argv) {
 	// パノラマ平面の構成
 	int roll = 0;
 	int pitch = 0;
-	int yaw = -20;
+	int yaw = 30;
 	Mat A1Matrix = cv::Mat::eye(3, 3, CV_64FC1);
 	Mat A2Matrix = cv::Mat::eye(3, 3, CV_64FC1);
 
@@ -387,16 +395,32 @@ int main(int argc, char** argv) {
 	//	A1Matrix.at<double> (2, 2) = 1080;
 
 	// GCの内部パラメータの逆行列
-	A1Matrix.at<double> (0, 0) = 1.1107246554597004e-003;
-	A1Matrix.at<double> (0, 2) = -7.0476759105087217e-001;
-	A1Matrix.at<double> (1, 1) = 1.0937849972977411e-003;
-	A1Matrix.at<double> (1, 2) = -4.2040554903081440e-001;
+	//A1Matrix.at<double> (0, 0) = 1.1107246554597004e-003;
+	//A1Matrix.at<double> (0, 2) = -7.0476759105087217e-001;
+	//A1Matrix.at<double> (1, 1) = 1.0937849972977411e-003;
+	//A1Matrix.at<double> (1, 2) = -4.2040554903081440e-001;
+
+	// AQの内部パラメータの逆行列
+	A1Matrix.at<double> (0, 0) = 8.1632905612490970e-004;
+	A1Matrix.at<double> (0, 2) = -5.2593546441192318e-001;
+	A1Matrix.at<double> (1, 1) = 8.1390778599629236e-004;
+	A1Matrix.at<double> (1, 2) = -2.7706041350882804e-001;
+
 	cout << "<A1>" << endl << A1Matrix.inv() << endl;
 
-	A2Matrix.at<double> (0, 0) = 900;
-	A2Matrix.at<double> (1, 1) = 900;
+	Mat inv_a1 = A1Matrix.inv();
+	// GCでの仮想パノラマ平面
+	//A2Matrix.at<double> (0, 0) = 900;
+	//A2Matrix.at<double> (1, 1) = 900;
+	//A2Matrix.at<double> (0, 2) = PANO_W / 2;
+	//A2Matrix.at<double> (1, 2) = PANO_H / 2;
+
+	// AQでの仮想パノラマ平面
+	A2Matrix.at<double> (0, 0) = inv_a1.at<double> (0, 0);
+	A2Matrix.at<double> (1, 1) = inv_a1.at<double> (1, 1);
 	A2Matrix.at<double> (0, 2) = PANO_W / 2;
 	A2Matrix.at<double> (1, 2) = PANO_H / 2;
+
 	cout << "<A2>" << endl << A2Matrix << endl;
 
 	try {
@@ -496,16 +520,16 @@ int main(int argc, char** argv) {
 	cout << "fps = " << fps << endl;
 
 	// 合成開始フレームまでスキップ
-	if (skip > 0) {
-		cap.set(CV_CAP_PROP_POS_FRAMES, skip + 1);
-		frame_num = skip + 1;
+	if (skip > 1) {
+		cap.set(CV_CAP_PROP_POS_FRAMES, skip);
+		frame_num = skip;
 	} else {
 		frame_num = 0;
 	}
 	feature = Feature2D::create(algorithm_type);
 	if (algorithm_type.compare("SURF") == 0) {
 		feature->set("extended", 1);
-		feature->set("hessianThreshold", 100);
+		feature->set("hessianThreshold", 50);
 		feature->set("nOctaveLayers", 4);
 		feature->set("nOctaves", 3);
 		feature->set("upright", 0);
@@ -560,22 +584,24 @@ int main(int argc, char** argv) {
 	else
 		cap >> image;
 
-	/*
-	 Mat	dist =	(Mat_<double> (1, 5) << 4.0557296604988635e-002, -7.0495680844213993e-001, 1.4154080043873203e-002, -2.7104946840592046e-003, 2.9299467217460284e+000);
-	 cout << "dist param : " << dist << endl;
-	 w = image.cols;
-	 h = image.rows;
-	 //CvArr cvimage = image;
-	 IplImage dist_img = image;
-	 IplImage *undist_img = cvCreateImage(cvSize(w, h), 8, 3);
-	 Mat inv_a1 = A1Matrix.inv();
-	 CvMat a1 = inv_a1;
-	 CvMat cvdist(dist);
-	 cvUndistort2(&dist_img, undist_img, &a1, &(CvMat) dist);
 
-	 Mat dist_src = image.clone();
-	 //undistort(dist_src, image, A1Matrix.inv(), dist);
-	 */
+	Mat
+			dist =
+					(Mat_<double> (1, 5) << 4.6607295014012916e-002, 4.1437801936723750e-001, -7.4809715282343212e-003, -2.9591314503800725e-003, -2.1417165056372101e+000);
+	cout << "dist param : " << dist << endl;
+	//w = image.cols;
+	// h = image.rows;
+	//CvArr cvimage = image;
+	//IplImage dist_img = image;
+	// IplImage *undist_img = cvCreateImage(cvSize(w, h), 8, 3);
+	//Mat inv_a1 = A1Matrix.inv();
+	//CvMat a1 = inv_a1;
+	//CvMat cvdist(dist);
+	//cvUndistort2(&dist_img, undist_img, &a1, &(CvMat) dist);
+
+	Mat dist_src = image.clone();
+	//undistort(dist_src, image, A1Matrix.inv(), dist);
+
 	cvtColor(image, gray_image, CV_RGB2GRAY);
 
 	// マスクイメージ関係を生成
@@ -590,7 +616,12 @@ int main(int argc, char** argv) {
 	feature->operator ()(gray_image, Mat(), imageKeypoints, imageDescriptors);
 
 	warpPerspective(image, transform_image2, h_base, Size(PANO_W, PANO_H)); // 先頭フレームをパノラマ平面へ投影
+	FileStorage cvfs("aria_H.xml", cv::FileStorage::WRITE);
 
+	ss << "homo_" << frame_num;
+	write(cvfs, ss.str(), h_base);
+	ss.clear();
+	ss.str("");
 
 	// パノラマ動画ファイルを作成
 	if (f_video)
@@ -604,15 +635,6 @@ int main(int argc, char** argv) {
 			frame_num++;
 		}
 
-	// 手ブレ検出用各種変数
-	int img_num = 0;
-	stringstream ss; // 書き出しファイル名
-	cv::Mat tmp_img; //
-	cv::Mat sobel_img; // エッジ画像格納先
-
-	vector<Mat> hist_image;
-	int blur_skip;
-
 	// センターサークル画像を用いた場合，センターサークルと動画の最初のフレーム間は
 	// 補完しないようにする
 	if (f_center)
@@ -624,11 +646,13 @@ int main(int argc, char** argv) {
 	long count_blur = 100;
 
 	namedWindow("Object Correspond", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
-	FileStorage cvfs("aria_H.xml", cv::FileStorage::WRITE);
+
 	while (frame_num < end && frame_num < FRAME_MAX + FRAME_T + 1) {
 
 		while (f_blur) {
 			cap >> object;
+			if (object.empty())
+				break;
 			frame_num++;
 			printf("\nframe=%d\n", frame_num);
 			cvtColor(object, gray_image, CV_RGB2GRAY);
@@ -692,7 +716,7 @@ int main(int argc, char** argv) {
 
 		// 歪み補正
 		//Mat	dist =	(Mat_<double> (1, 5) << 4.0557296604988635e-002, -7.0495680844213993e-001, 1.4154080043873203e-002, -2.7104946840592046e-003, 2.9299467217460284e+000);
-		//Mat dist_src = object.clone();
+		Mat dist_src = object.clone();
 
 		//dist_img = object.clone();
 		//IplImage *undist_img = cvCreateImage(cvSize(w, h), 8, 3);
@@ -701,9 +725,10 @@ int main(int argc, char** argv) {
 		//CvMat cvdist(dist);
 
 		//cvUndistort2(&dist_img, undist_img, &a1, &(CvMat) dist);
+		//object = cvarrToMat(undist_img);
 
 		//undistort(dist_src, object, A1Matrix.inv(), dist);
-		//object = cvarrToMat(undist_img);
+
 
 		cvtColor(object, gray_image, CV_RGB2GRAY);
 		feature->operator ()(gray_image, Mat(), objectKeypoints,
