@@ -239,8 +239,8 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 
 	cout << key1->size() << endl;
 
-	matcher.knnMatch(descriptors1, descriptors2, matches21, knn);
-	matcher.knnMatch(descriptors2, descriptors1, matches12, knn);
+	matcher.knnMatch(descriptors1, descriptors2, matches12, knn);
+	matcher.knnMatch(descriptors2, descriptors1, matches21, knn);
 	tmp_matches.clear();
 	// KNN探索で，1->2と2->1が一致するものだけがマッチしたとみなされる
 	for (size_t m = 0; m < matches12.size(); m++) {
@@ -282,8 +282,8 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 				//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
 				//				cout << "i : " << i << endl;
 				matches->push_back(tmp_matches[i]);
-				pt1->push_back((*key2)[tmp_matches[i].queryIdx].pt);
-				pt2->push_back((*key1)[tmp_matches[i].trainIdx].pt);
+				pt1->push_back((*key1)[tmp_matches[i].queryIdx].pt);
+				pt2->push_back((*key2)[tmp_matches[i].trainIdx].pt);
 				//good_objectKeypoints.push_back(
 				//		objectKeypoints[tmp_matches[i].queryIdx]);
 				//good_imageKeypoints.push_back(
@@ -351,6 +351,7 @@ int main(int argc, char** argv) {
 	// 各種アルゴリズムによる特徴点検出および特徴量記述
 	string algorithm_type;
 	Ptr<Feature2D> feature;
+	int hessian;
 	// SIFT
 	//SIFT feature;
 
@@ -381,7 +382,7 @@ int main(int argc, char** argv) {
 	// パノラマ平面の構成
 	int roll = 0;
 	int pitch = 0;
-	int yaw = 30;
+	double yaw = 0;
 	Mat A1Matrix = cv::Mat::eye(3, 3, CV_64FC1);
 	Mat A2Matrix = cv::Mat::eye(3, 3, CV_64FC1);
 
@@ -395,16 +396,16 @@ int main(int argc, char** argv) {
 	//	A1Matrix.at<double> (2, 2) = 1080;
 
 	// GCの内部パラメータの逆行列
-	//A1Matrix.at<double> (0, 0) = 1.1107246554597004e-003;
-	//A1Matrix.at<double> (0, 2) = -7.0476759105087217e-001;
-	//A1Matrix.at<double> (1, 1) = 1.0937849972977411e-003;
-	//A1Matrix.at<double> (1, 2) = -4.2040554903081440e-001;
+	A1Matrix.at<double> (0, 0) = 1.1107246554597004e-003;
+	A1Matrix.at<double> (0, 2) = -7.0476759105087217e-001;
+	A1Matrix.at<double> (1, 1) = 1.0937849972977411e-003;
+	A1Matrix.at<double> (1, 2) = -4.2040554903081440e-001;
 
 	// AQの内部パラメータの逆行列
-	A1Matrix.at<double> (0, 0) = 8.1632905612490970e-004;
-	A1Matrix.at<double> (0, 2) = -5.2593546441192318e-001;
-	A1Matrix.at<double> (1, 1) = 8.1390778599629236e-004;
-	A1Matrix.at<double> (1, 2) = -2.7706041350882804e-001;
+//	A1Matrix.at<double> (0, 0) = 8.1632905612490970e-004;
+//	A1Matrix.at<double> (0, 2) = -5.2593546441192318e-001;
+//	A1Matrix.at<double> (1, 1) = 8.1390778599629236e-004;
+//	A1Matrix.at<double> (1, 2) = -2.7706041350882804e-001;
 
 	cout << "<A1>" << endl << A1Matrix.inv() << endl;
 
@@ -426,17 +427,20 @@ int main(int argc, char** argv) {
 	try {
 		// コマンドラインオプションの定義
 		options_description opt("Usage");
-		opt.add_options()("cam", value<std::string> ()->default_value(
-				"cam_data.txt"), "動画名やセンサファイル名が記述されたファイルの指定")("center", value<
-				std::string> (), "センター画像の指定")("start,s",
-				value<int> ()->default_value(0), "スタートフレームの指定")("end,e", value<
-				int> (), "終了フレームの指定")("comp", value<bool> ()->default_value(
-				false), "補完の設定")("inter,i", value<int> ()->default_value(9),
-				"取得フレームの間隔")("blur,b", value<int> ()->default_value(0),
-				"ブラーによるフレームの破棄の閾値")("video,v", value<std::string> (),
-				"書きだす動画ファイル名の指定")("fps,f", value<int> ()->default_value(30),
-				"書きだす動画のフレームレートの指定")("algo,a", value<string> ()->default_value(
-				"SURF"), "特徴点抽出等のアルゴリズムの指定")("help,h", "ヘルプの出力");
+		opt.add_options()
+				("cam", value<std::string> ()->default_value("cam_data.txt"), "動画名やセンサファイル名が記述されたファイルの指定")
+				("center", value<	std::string> (), "センター画像の指定")
+				("start,s",value<int> ()->default_value(0), "スタートフレームの指定")
+				("end,e", value<int> (), "終了フレームの指定")
+				("comp", value<bool> ()->default_value(false), "補完の設定")
+				("inter,i", value<int> ()->default_value(9),"取得フレームの間隔")
+				("blur,b", value<int> ()->default_value(0),"ブラーによるフレームの破棄の閾値")
+				("video,v", value<std::string> (),"書きだす動画ファイル名の指定")
+				("yaw", value<double> ()->default_value(0),"初期フレーム投影時のyaw")
+				("fps,f", value<int> ()->default_value(30),"書きだす動画のフレームレートの指定")
+				("algo,a", value<string> ()->default_value("SURF"), "特徴点抽出等のアルゴリズムの指定")
+				("hessian", value<int> ()->default_value(50), "SURFのhessianの値")
+				("help,h", "ヘルプの出力");
 
 		// オプションのマップを作成
 		variables_map vm;
@@ -477,6 +481,8 @@ int main(int argc, char** argv) {
 		FRAME_T = vm["inter"].as<int> (); // フレーム取得間隔
 		blur = vm["blur"].as<int> (); // 手ブレ閾値
 		fps = vm["fps"].as<int> (); // 書き出し動画のfps
+		yaw = vm["yaw"].as<double>(); // 初期フレーム角度
+		hessian = vm["hessian"].as<int>();
 
 	} catch (exception& e) {
 		cerr << "error: " << e.what() << "\n";
@@ -529,7 +535,7 @@ int main(int argc, char** argv) {
 	feature = Feature2D::create(algorithm_type);
 	if (algorithm_type.compare("SURF") == 0) {
 		feature->set("extended", 1);
-		feature->set("hessianThreshold", 50);
+		feature->set("hessianThreshold", hessian);
 		feature->set("nOctaveLayers", 4);
 		feature->set("nOctaves", 3);
 		feature->set("upright", 0);
@@ -734,8 +740,8 @@ int main(int argc, char** argv) {
 		feature->operator ()(gray_image, Mat(), objectKeypoints,
 				objectDescriptors);
 
-		good_matcher(imageDescriptors, objectDescriptors, &imageKeypoints,
-				&objectKeypoints, &matches, &pt1, &pt2);
+		good_matcher( objectDescriptors,imageDescriptors,
+				&objectKeypoints, &imageKeypoints, &matches, &pt1, &pt2);
 
 		cout << "selected good_matches : " << pt1.size() << endl;
 		// マッチング結果をリサイズして表示
@@ -879,7 +885,7 @@ int main(int argc, char** argv) {
 
 	imshow("Object Correspond", transform_image2);
 	cout << "finished making the panorama" << endl;
-	waitKey(0);
+	waitKey(30);
 	imwrite("transform4.jpg", transform_image2);
 	imwrite("mask.jpg", mask);
 
