@@ -11,6 +11,7 @@
 #include <vector>
 #include <fstream>
 #include <boost/program_options.hpp>
+#include"3dms-func.h"
 #define PANO_W 6000
 #define PANO_H 3000
 using namespace std;
@@ -337,8 +338,22 @@ int main(int argc, char** argv) {
 	char sensorfileName[256];
 	FILE *SensorFP;
 
-	// 全ホモグラフィ行列をアウトプット
-	std::ofstream out_Hmat("mat_homography.txt", std::ios::out);
+	// 取り出したフレームのセンサ情報(obj_sd)
+	// パノラマ合成元フレームの中でobj_sdに最も近いフレームのセンサ情報
+	SENSOR_DATA obj_sd, near_sd;
+
+	// パノラマ背景に使われたフレームのセンサ情報のvector
+	vector<SENSOR_DATA> pano_sds;
+
+	// パノラマ背景に使われたフレーム番号のvector
+	vector<int> vec_n_pano_frames;
+
+	// パノラマ背景に使われたフレームのホモグラフィ行列
+	vector<Mat> pano_monographys;
+
+	// 合成に使ったホモグラフィ行列をxmlに出力
+	FileStorage cvfs("aria_H.xml", cv::FileStorage::WRITE);
+
 	// 手ブレ検出用各種変数
 	int img_num = 0;
 	stringstream ss; // 書き出しファイル名
@@ -402,10 +417,10 @@ int main(int argc, char** argv) {
 	A1Matrix.at<double> (1, 2) = -4.2040554903081440e-001;
 
 	// AQの内部パラメータの逆行列
-//	A1Matrix.at<double> (0, 0) = 8.1632905612490970e-004;
-//	A1Matrix.at<double> (0, 2) = -5.2593546441192318e-001;
-//	A1Matrix.at<double> (1, 1) = 8.1390778599629236e-004;
-//	A1Matrix.at<double> (1, 2) = -2.7706041350882804e-001;
+	//	A1Matrix.at<double> (0, 0) = 8.1632905612490970e-004;
+	//	A1Matrix.at<double> (0, 2) = -5.2593546441192318e-001;
+	//	A1Matrix.at<double> (1, 1) = 8.1390778599629236e-004;
+	//	A1Matrix.at<double> (1, 2) = -2.7706041350882804e-001;
 
 	cout << "<A1>" << endl << A1Matrix.inv() << endl;
 
@@ -427,20 +442,20 @@ int main(int argc, char** argv) {
 	try {
 		// コマンドラインオプションの定義
 		options_description opt("Usage");
-		opt.add_options()
-				("cam", value<std::string> ()->default_value("cam_data.txt"), "動画名やセンサファイル名が記述されたファイルの指定")
-				("center", value<	std::string> (), "センター画像の指定")
-				("start,s",value<int> ()->default_value(0), "スタートフレームの指定")
-				("end,e", value<int> (), "終了フレームの指定")
-				("comp", value<bool> ()->default_value(false), "補完の設定")
-				("inter,i", value<int> ()->default_value(9),"取得フレームの間隔")
-				("blur,b", value<int> ()->default_value(0),"ブラーによるフレームの破棄の閾値")
-				("video,v", value<std::string> (),"書きだす動画ファイル名の指定")
-				("yaw", value<double> ()->default_value(0),"初期フレーム投影時のyaw")
-				("fps,f", value<int> ()->default_value(30),"書きだす動画のフレームレートの指定")
-				("algo,a", value<string> ()->default_value("SURF"), "特徴点抽出等のアルゴリズムの指定")
-				("hessian", value<int> ()->default_value(50), "SURFのhessianの値")
-				("help,h", "ヘルプの出力");
+		opt.add_options()("cam", value<std::string> ()->default_value(
+				"cam_data.txt"), "動画名やセンサファイル名が記述されたファイルの指定")("center", value<
+				std::string> (), "センター画像の指定")("start,s",
+				value<int> ()->default_value(0), "スタートフレームの指定")("end,e", value<
+				int> (), "終了フレームの指定")("comp", value<bool> ()->default_value(
+				false), "補完の設定")("inter,i", value<int> ()->default_value(9),
+				"取得フレームの間隔")("blur,b", value<int> ()->default_value(0),
+				"ブラーによるフレームの破棄の閾値")("video,v", value<std::string> (),
+				"書きだす動画ファイル名の指定")("yaw", value<double> ()->default_value(0),
+				"初期フレーム投影時のyaw")("fps,f", value<int> ()->default_value(30),
+				"書きだす動画のフレームレートの指定")("algo,a", value<string> ()->default_value(
+				"SURF"), "特徴点抽出等のアルゴリズムの指定")("hessian",
+				value<int> ()->default_value(50), "SURFのhessianの値")("help,h",
+				"ヘルプの出力");
 
 		// オプションのマップを作成
 		variables_map vm;
@@ -481,8 +496,8 @@ int main(int argc, char** argv) {
 		FRAME_T = vm["inter"].as<int> (); // フレーム取得間隔
 		blur = vm["blur"].as<int> (); // 手ブレ閾値
 		fps = vm["fps"].as<int> (); // 書き出し動画のfps
-		yaw = vm["yaw"].as<double>(); // 初期フレーム角度
-		hessian = vm["hessian"].as<int>();
+		yaw = vm["yaw"].as<double> (); // 初期フレーム角度
+		hessian = vm["hessian"].as<int> ();
 
 	} catch (exception& e) {
 		cerr << "error: " << e.what() << "\n";
@@ -528,7 +543,7 @@ int main(int argc, char** argv) {
 	// 合成開始フレームまでスキップ
 	if (skip > 1) {
 		cap.set(CV_CAP_PROP_POS_FRAMES, skip);
-		frame_num = skip;
+		frame_num = skip - 1; // 現在のフレーム位置を設定
 	} else {
 		frame_num = 0;
 	}
@@ -583,13 +598,43 @@ int main(int argc, char** argv) {
 	for (int ii = 0; ii < v_log_str.size(); ii++)
 		log << v_log_str[ii] << " " << feature->getDouble(v_log_str[ii])
 				<< endl;
+	/*end of logging*/
 
+	SENSOR_DATA *sensor = (SENSOR_DATA *) malloc(sizeof(SENSOR_DATA) * 5000);
+	double s_time;
 	// 最初のフレームを取得（センターサークル画像に差し替え）
-	if (f_center)
+	if (f_center) {
 		image = center_img.clone();
-	else
-		cap >> image;
+	} else {
 
+		// 撮影時間とセンサ情報（ORIとTIME）を取得
+		string time_buf;
+		ifstream ifs_time(timefileName);
+
+		if (!ifs_time.is_open()) {
+			cerr << "cannnot open TIME file : " << timefileName << endl;
+			return -1;
+		}
+
+		// 三回読み飛ばして秒数を文字で取得
+		ifs_time >> time_buf;
+		ifs_time >> time_buf;
+		ifs_time >> time_buf;
+		ifs_time >> s_time; // msec
+
+		cout << "s_time : " << s_time / 1000.0 << "[sec]" << endl;
+
+		// 対象フレームのセンサデータを一括読み込み
+		LoadSensorData(sensorfileName, &sensor);
+
+		frame_num++;//現在のフレーム位置を更新
+		// 対象フレームの動画の頭からの時間frame_timeに撮影開始時刻s_timeを加算して，実時間に変換
+		double frame_msec = cap.get(CV_CAP_PROP_POS_MSEC) + s_time;
+		GetSensorDataForTime(frame_msec / 1000.0, &sensor, &obj_sd);
+		cap >> image;
+	}
+
+	cout << cap.get(CV_CAP_PROP_FPS) << "[frame / sec]" << endl;
 
 	Mat
 			dist =
@@ -605,7 +650,7 @@ int main(int argc, char** argv) {
 	//CvMat cvdist(dist);
 	//cvUndistort2(&dist_img, undist_img, &a1, &(CvMat) dist);
 
-	Mat dist_src = image.clone();
+	//Mat dist_src = image.clone();
 	//undistort(dist_src, image, A1Matrix.inv(), dist);
 
 	cvtColor(image, gray_image, CV_RGB2GRAY);
@@ -622,7 +667,7 @@ int main(int argc, char** argv) {
 	feature->operator ()(gray_image, Mat(), imageKeypoints, imageDescriptors);
 
 	warpPerspective(image, transform_image2, h_base, Size(PANO_W, PANO_H)); // 先頭フレームをパノラマ平面へ投影
-	FileStorage cvfs("aria_H.xml", cv::FileStorage::WRITE);
+
 
 	ss << "homo_" << frame_num;
 	write(cvfs, ss.str(), h_base);
@@ -635,11 +680,16 @@ int main(int argc, char** argv) {
 				(int) fps, cvSize(w, h), 1);
 
 	// フレームを飛ばす
-	if (!f_center)
+	if (!f_center) {
 		for (int i = 0; i < FRAME_T; i++) {
 			cap >> object;
 			frame_num++;
 		}
+		// このフレームのセンサとフレーム番号，ホモグラフィ行列を記録
+		pano_sds.push_back(obj_sd);
+		vec_n_pano_frames.push_back(frame_num);
+		pano_monographys.push_back(h_base);
+	}
 
 	// センターサークル画像を用いた場合，センターサークルと動画の最初のフレーム間は
 	// 補完しないようにする
@@ -650,12 +700,13 @@ int main(int argc, char** argv) {
 	bool f_hist = false;
 	bool f_blur = true;
 	long count_blur = 100;
-
+	double obj_frame_msec;
 	namedWindow("Object Correspond", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
 
 	while (frame_num < end && frame_num < FRAME_MAX + FRAME_T + 1) {
 
 		while (f_blur) {
+			obj_frame_msec = cap.get(CV_CAP_PROP_POS_MSEC);
 			cap >> object;
 			if (object.empty())
 				break;
@@ -722,7 +773,7 @@ int main(int argc, char** argv) {
 
 		// 歪み補正
 		//Mat	dist =	(Mat_<double> (1, 5) << 4.0557296604988635e-002, -7.0495680844213993e-001, 1.4154080043873203e-002, -2.7104946840592046e-003, 2.9299467217460284e+000);
-		Mat dist_src = object.clone();
+		//Mat dist_src = object.clone();
 
 		//dist_img = object.clone();
 		//IplImage *undist_img = cvCreateImage(cvSize(w, h), 8, 3);
@@ -740,8 +791,62 @@ int main(int argc, char** argv) {
 		feature->operator ()(gray_image, Mat(), objectKeypoints,
 				objectDescriptors);
 
-		good_matcher( objectDescriptors,imageDescriptors,
-				&objectKeypoints, &imageKeypoints, &matches, &pt1, &pt2);
+		// TODO : 取り出したフレーム(object)に近いフレーム(image)を
+		//         センサ情報から探して特徴点抽出をしてマッチングする
+
+		// 取り出したフレームの秒数を取得
+		double frame_msec = obj_frame_msec + s_time;
+		GetSensorDataForTime(frame_msec / 1000.0, &sensor, &obj_sd);
+		pano_sds.push_back(obj_sd);
+		vec_n_pano_frames.push_back(frame_num);
+
+
+		// 近い角度のフレームを計算する
+		Mat vec1(3, 1, CV_64F), vec2(3, 1, CV_64F);
+		Mat near_vec(3, 1, CV_64F);
+		long near_frame;
+
+		SetYawRotationMatrix(&yawMatrix, obj_sd.alpha);
+		SetPitchRotationMatrix(&pitchMatrix, obj_sd.beta);
+		SetRollRotationMatrix(&rollMatrix, obj_sd.gamma);
+		//warpPerspective(Point3d(1, 0, 0), vec1, yawMatrix * pitchMatrix* rollMatrix);
+		vec1 = yawMatrix * pitchMatrix * rollMatrix * (cv::Mat_<double>(3, 1)
+				<< 1, 0, 0);
+		double dist, min = DBL_MAX;
+		cout << obj_sd.TT<< " [sec]" << endl;
+		for (vector<SENSOR_DATA>::iterator sd_it = pano_sds.begin(); sd_it
+				< pano_sds.end(); sd_it++) {
+			SetYawRotationMatrix(&yawMatrix, (*sd_it).alpha);
+			SetPitchRotationMatrix(&pitchMatrix, (*sd_it).beta);
+			SetRollRotationMatrix(&rollMatrix, (*sd_it).gamma);
+			vec2 = yawMatrix * pitchMatrix * rollMatrix * (cv::Mat_<double>(3,
+					1) << 1, 0, 0);
+
+			dist = sqrt(pow(vec1.at<double> (0, 0) - vec2.at<double> (0, 0), 2)
+					+ pow(vec1.at<double> (0, 1) - vec2.at<double> (0, 1), 2)
+					+ pow(vec1.at<double> (0, 2) - vec2.at<double> (0, 2), 2));
+			//cout << "dist : " << dist << endl;
+			// 近いものがあったらnear_sdを更新
+			if (dist < min) {
+				min = dist;
+				near_sd = (*sd_it);
+				cout << "update min " << (*sd_it).TT <<endl;
+			}
+
+		}
+		min = DBL_MAX;
+		cout << vec2 << endl;
+
+		long tmp_frame_num;
+		tmp_frame_num = cap.get(CV_CAP_PROP_POS_FRAMES);
+		cap.set(CV_CAP_PROP_POS_MSEC, near_sd.TT*1000.0 - s_time);
+		//cout << "detect near frame : " << near_sd.TT << " [sec]" << endl;
+		cout << cap.get(CV_CAP_PROP_POS_FRAMES) << " [frame]" << endl;
+
+		cap.set(CV_CAP_PROP_POS_FRAMES, tmp_frame_num);
+
+		good_matcher(objectDescriptors, imageDescriptors, &objectKeypoints,
+				&imageKeypoints, &matches, &pt1, &pt2);
 
 		cout << "selected good_matches : " << pt1.size() << endl;
 		// マッチング結果をリサイズして表示
@@ -827,10 +932,11 @@ int main(int argc, char** argv) {
 		//cout << Mat(pt1) << endl;
 
 		cv::Mat tmp = homography.clone();
-		out_Hmat << tmp << endl;
 		h_base = h_base * homography;
 
 		warpPerspective(object, transform_image, h_base, Size(PANO_W, PANO_H));
+		pano_monographys.push_back(h_base);
+
 
 		Mat h2 = h_base;
 		warpPerspective(white_img, pano_black, h2, Size(PANO_W, PANO_H),
