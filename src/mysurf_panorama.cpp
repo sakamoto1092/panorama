@@ -454,7 +454,7 @@ int main(int argc, char** argv) {
 				"初期フレーム投影時のyaw")("fps,f", value<int> ()->default_value(30),
 				"書きだす動画のフレームレートの指定")("algo,a", value<string> ()->default_value(
 				"SURF"), "特徴点抽出等のアルゴリズムの指定")("hessian",
-				value<int> ()->default_value(50), "SURFのhessianの値")("help,h",
+				value<int> ()->default_value(20), "SURFのhessianの値")("help,h",
 				"ヘルプの出力");
 
 		// オプションのマップを作成
@@ -640,8 +640,8 @@ int main(int argc, char** argv) {
 			dist =
 					(Mat_<double> (1, 5) << 4.6607295014012916e-002, 4.1437801936723750e-001, -7.4809715282343212e-003, -2.9591314503800725e-003, -2.1417165056372101e+000);
 	cout << "dist param : " << dist << endl;
-	//w = image.cols;
-	// h = image.rows;
+	w = image.cols;
+	h = image.rows;
 	//CvArr cvimage = image;
 	//IplImage dist_img = image;
 	// IplImage *undist_img = cvCreateImage(cvSize(w, h), 8, 3);
@@ -676,7 +676,7 @@ int main(int argc, char** argv) {
 
 	// パノラマ動画ファイルを作成
 	if (f_video)
-		VideoWriter.open(n_video.c_str(), CV_FOURCC('X', 'V', 'I', 'D'),
+		VideoWriter.open(n_video.c_str(), CV_FOURCC('D','I','V','X'),
 				(int) fps, cvSize(w, h), 1);
 
 	// フレームを飛ばす
@@ -685,9 +685,10 @@ int main(int argc, char** argv) {
 			cap >> object;
 			frame_num++;
 		}
-		// このフレームのセンサとフレーム番号，ホモグラフィ行列を記録
+		// 最初に投影した動画フレームのセンサとフレーム番号，ホモグラフィ行列を記録
 		pano_sds.push_back(obj_sd);
 		vec_n_pano_frames.push_back(frame_num);
+		cout << "pushback background image src frame : " << frame_num << endl;
 		pano_monographys.push_back(h_base);
 	}
 
@@ -794,12 +795,11 @@ int main(int argc, char** argv) {
 		// TODO : 取り出したフレーム(object)に近いフレーム(image)を
 		//         センサ情報から探して特徴点抽出をしてマッチングする
 
-		// 取り出したフレームの秒数を取得
+		// 取り出したフレームセンサ情報と秒数を取得
 		double frame_msec = obj_frame_msec + s_time;
 		GetSensorDataForTime(frame_msec / 1000.0, &sensor, &obj_sd);
-		pano_sds.push_back(obj_sd);
-		vec_n_pano_frames.push_back(frame_num);
-
+		//pano_sds.push_back(obj_sd);
+		//vec_n_pano_frames.push_back(frame_num);
 
 		// 近い角度のフレームを計算する
 		Mat vec1(3, 1, CV_64F), vec2(3, 1, CV_64F);
@@ -812,10 +812,14 @@ int main(int argc, char** argv) {
 		//warpPerspective(Point3d(1, 0, 0), vec1, yawMatrix * pitchMatrix* rollMatrix);
 		vec1 = yawMatrix * pitchMatrix * rollMatrix * (cv::Mat_<double>(3, 1)
 				<< 1, 0, 0);
-		double dist, min = DBL_MAX;
-		cout << obj_sd.TT<< " [sec]" << endl;
+		double dist, min = 0.5;
+		Mat near_homography;
+		//cout << obj_sd.TT << " [sec]" << endl;
+		bool f_detect_near = false;
+		near_homography = h_base.clone();
 		for (vector<SENSOR_DATA>::iterator sd_it = pano_sds.begin(); sd_it
 				< pano_sds.end(); sd_it++) {
+			int i = 0;
 			SetYawRotationMatrix(&yawMatrix, (*sd_it).alpha);
 			SetPitchRotationMatrix(&pitchMatrix, (*sd_it).beta);
 			SetRollRotationMatrix(&rollMatrix, (*sd_it).gamma);
@@ -827,24 +831,44 @@ int main(int argc, char** argv) {
 					+ pow(vec1.at<double> (0, 2) - vec2.at<double> (0, 2), 2));
 			//cout << "dist : " << dist << endl;
 			// 近いものがあったらnear_sdを更新
-			if (dist < min) {
+			if (dist < 0.1 && dist < min) {
 				min = dist;
 				near_sd = (*sd_it);
-				cout << "update min " << (*sd_it).TT <<endl;
+				cout << "detect near frame : " << vec_n_pano_frames[i] << endl;
+				f_detect_near = true;
+				near_frame = vec_n_pano_frames[i];
+				near_homography = pano_monographys[i];
 			}
+			i++;
+		}
+		min = 0.5;
+		f_detect_near = false;
+
+		// 近いフレームがあったならそのフレームとマッチング
+		// 見つからなかったら，そのフレームのセンサ情報とホモグラフィー行列などを保存
+		long tmp_frame_num;
+		if (f_detect_near) {
+			tmp_frame_num = cap.get(CV_CAP_PROP_POS_FRAMES); // 現在のフレーム位置を退避
+			cap.set(CV_CAP_PROP_POS_FRAMES, near_frame);
+			//cout << "detect near frame : " << near_sd.TT << " [sec]" << endl;
+			//cout << cap.get(CV_CAP_PROP_POS_FRAMES) << " [frame]" << endl;
+			cap >> image;
+			cap.set(CV_CAP_PROP_POS_FRAMES, tmp_frame_num); // フレーム位置を復元
+
+			// 近いフレームの特徴点抽出を再度実行
+			cvtColor(image, gray_image, CV_RGB2GRAY);
+			feature->operator ()(gray_image, Mat(), imageKeypoints,
+					imageDescriptors);
+		} else {
+			pano_sds.push_back(obj_sd);
+			vec_n_pano_frames.push_back(frame_num);
+			cout << "pushback background image src frame : " << frame_num
+					<< endl;
 
 		}
-		min = DBL_MAX;
-		cout << vec2 << endl;
 
-		long tmp_frame_num;
-		tmp_frame_num = cap.get(CV_CAP_PROP_POS_FRAMES);
-		cap.set(CV_CAP_PROP_POS_MSEC, near_sd.TT*1000.0 - s_time);
-		//cout << "detect near frame : " << near_sd.TT << " [sec]" << endl;
-		cout << cap.get(CV_CAP_PROP_POS_FRAMES) << " [frame]" << endl;
-
-		cap.set(CV_CAP_PROP_POS_FRAMES, tmp_frame_num);
-
+		// ここで，近いフレームが見つかっている場合はそのフレームがimageに
+		// 見つかっていない場合は，FRAME_T + a 前のフレームがimageに格納されているはず
 		good_matcher(objectDescriptors, imageDescriptors, &objectKeypoints,
 				&imageKeypoints, &matches, &pt1, &pt2);
 
@@ -932,11 +956,14 @@ int main(int argc, char** argv) {
 		//cout << Mat(pt1) << endl;
 
 		cv::Mat tmp = homography.clone();
-		h_base = h_base * homography;
+		// 近くのフレームが検出されていたらnear_homographyはそのフレームの合成に使われたホモグラフィ行列が格納されている
+		// 検出されていないなら，直前の合成に使われたホモグラフィ行列が格納されている
+		h_base = near_homography * homography;
+
 
 		warpPerspective(object, transform_image, h_base, Size(PANO_W, PANO_H));
-		pano_monographys.push_back(h_base);
-
+		if (!f_detect_near)
+			pano_monographys.push_back(h_base);
 
 		Mat h2 = h_base;
 		warpPerspective(white_img, pano_black, h2, Size(PANO_W, PANO_H),
@@ -974,7 +1001,7 @@ int main(int argc, char** argv) {
 			roi.height = (double) transform_image.rows * f;
 			roi.y = ((double) h - (double) transform_image.rows * f) / 2.0;
 			Mat roi_movie(movie, roi);
-			resize(transform_image2, roi_movie, cv::Size(0, 0), f, f);
+			resize(transform_image, roi_movie, cv::Size(0, 0), f, f);
 			//tmp.copyTo(roi_movie);
 			VideoWriter.write(movie);
 		}
