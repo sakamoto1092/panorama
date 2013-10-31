@@ -231,15 +231,16 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 		vector<KeyPoint> *key2, std::vector<cv::DMatch> *matches, vector<
 				Point2f> *pt1, vector<Point2f> *pt2) {
 
-	FlannBasedMatcher matcher;
+	//FlannBasedMatcher matcher;
+	BFMatcher matcher(cv::NORM_L2,true);
 	vector<std::vector<cv::DMatch> > matches12, matches21;
 	std::vector<cv::DMatch> tmp_matches;
 	int knn = 1;
 	//BFMatcher matcher(cv::NORM_HAMMING, true);
-	//matcher.match(objectDescriptors, imageDescriptors, matches);
+	matcher.match(descriptors1, descriptors2, tmp_matches);
 
 	cout << key1->size() << endl;
-
+/*
 	matcher.knnMatch(descriptors1, descriptors2, matches12, knn);
 	matcher.knnMatch(descriptors2, descriptors1, matches21, knn);
 	tmp_matches.clear();
@@ -260,6 +261,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 				break;
 		}
 	}
+	*/
 	cout << "matches : " << tmp_matches.size() << endl;
 	double min_dist = DBL_MAX;
 	for (int i = 0; i < (int) tmp_matches.size(); i++) {
@@ -278,7 +280,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 		if (round((*key1)[tmp_matches[i].queryIdx].class_id) == round(
 				(*key2)[tmp_matches[i].trainIdx].class_id)) {
 			if (tmp_matches[i].distance > 0 && tmp_matches[i].distance
-					< (min_dist) * 3) {
+					< (min_dist+1) * 3) {
 				//		  &&	(fabs(objectKeypoints[matches[i].queryIdx].pt.y - imageKeypoints[matches[i].trainIdx].pt.y)
 				//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
 				//				cout << "i : " << i << endl;
@@ -292,6 +294,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 			}
 		}
 	}
+
 }
 
 int main(int argc, char** argv) {
@@ -548,6 +551,11 @@ int main(int argc, char** argv) {
 		frame_num = 0;
 	}
 	feature = Feature2D::create(algorithm_type);
+	if(feature == NULL){
+		cerr << algorithm_type << " algorithm was not found " <<endl;
+		cout << "using SURF algorithm" << endl;
+		feature = Feature2D::create("SURF");
+	}
 	if (algorithm_type.compare("SURF") == 0) {
 		feature->set("extended", 1);
 		feature->set("hessianThreshold", hessian);
@@ -953,12 +961,89 @@ int main(int argc, char** argv) {
 			printf("frame_num = %d\n", frame_num);
 		}
 
+		h_base = near_homography * homography;
+
+		// 固有値分解
+		Mat eigen_value,eigen_vec;
+		eigen(Mat(A2Matrix.inv()*h_base*A1Matrix.inv()).t() * Mat(A1Matrix*homography*A1Matrix.inv()),eigen_value,eigen_vec);
+
+		cout << "(R + tn^t/d) : " << Mat(A1Matrix*homography*A1Matrix.inv()).t() << endl;
+
+		// 特異値分解
+		Mat svd_w,svd_u,svd_vt;
+		SVD::compute(A2Matrix.inv()*h_base*A1Matrix.inv(),svd_w,svd_u,svd_vt);
+
+
+		cout << "<Eigenvalues> " << eigen_value.type() << endl;
+
+		cout << eigen_value << endl;
+
+		cout << "<Eigenvectors> " << eigen_vec.type() << endl;
+
+		cout << eigen_vec << endl;
+
+		cout << "< singular value> "  << svd_w.type() << endl;
+
+		cout << svd_w << endl;
+
+		Vec3d eigen_vec1,eigen_vec2,eigen_vec3;
+		eigen_vec1 = eigen_vec.col(0);
+		eigen_vec2 = eigen_vec.col(1);
+		eigen_vec3 = eigen_vec.col(2);
+
+
+
+
+
+		double k, m, phi, theta;
+		double mu, sigma;
+		k = svd_w.at<double>(0,0) - svd_w.at<double>(0,2);
+		//cout << svd_w.at<double>(0,0) << " - " << svd_w.at<double>(0,2) << " = ";
+		cout << "<k>" << endl;
+		cout << k << endl;
+
+		m = svd_w.at<double>(0,0) * svd_w.at<double>(0,2) - 1.0;
+		cout << "<m>" << endl;
+		cout << m  << endl;
+
+		phi = (-k + sqrt(k*k + 4.0*(m + 1.0))) / (2.0*k*(m + 1.0));
+		theta = (-k - sqrt(k*k + 4.0*(m + 1.0))) / (2.0*k*(m + 1.0));
+		cout << "<phi>" << endl;
+		cout << phi << endl;
+		cout << "<theta>" << endl;
+		cout << theta << endl;
+
+
+		//mu = sqrt(phi*phi*k*k + 2.0*phi*m + 1.0);
+		//sigma = sqrt(theta*theta*k*k + 2.0*theta*m + 1.0);
+		mu = norm(eigen_vec2);
+		sigma = norm(eigen_vec3);
+		cout << "<mu>" << endl;
+		cout << mu << endl;
+		cout << "<sigma>" << endl;
+		cout << sigma << endl;
+
+
+		Vec3d t0 =(mu*eigen_vec1-sigma*eigen_vec3)/(phi-theta);
+		Vec3d n = -(theta*mu*eigen_vec1-phi*sigma*eigen_vec3)/(phi-theta);
+
+		cout << "<t0>" << endl;
+		cout << t0 << endl;
+		cout << "<n>" << endl;
+		cout << n << endl;
+
+		cout << "<sigma * v_3>" << endl;
+		cout << sigma*eigen_vec3 << endl;
+
+		//waitKey(0);
+
+
 		//cout << Mat(pt1) << endl;
 
 		cv::Mat tmp = homography.clone();
 		// 近くのフレームが検出されていたらnear_homographyはそのフレームの合成に使われたホモグラフィ行列が格納されている
 		// 検出されていないなら，直前の合成に使われたホモグラフィ行列が格納されている
-		h_base = near_homography * homography;
+
 
 
 		warpPerspective(object, transform_image, h_base, Size(PANO_W, PANO_H));
