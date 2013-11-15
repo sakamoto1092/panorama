@@ -13,7 +13,7 @@
 #include <boost/program_options.hpp>
 #include"3dms-func.h"
 #define PANO_W 6000
-#define PANO_H 3000
+#define PANO_H 6000
 using namespace std;
 using namespace cv;
 using boost::program_options::options_description;
@@ -30,6 +30,7 @@ int main(int argc, char** argv) {
 
 
 	// 動画から取得した各種画像の格納先
+	Mat buf;
 	Mat image; // 投影先の画像
 	Mat object; // 変換元の画像
 	Mat gray_image; // 変換元の微分画像
@@ -59,8 +60,8 @@ int main(int argc, char** argv) {
 	bool f_line = false; // 直線検出を利用
 	bool f_undist = false; // レンズ歪み補正
 
-	float fps = 20;  // 書き出しビデオのfps
-	string n_video;  // 書き出しビデオファイル名
+	float fps = 20; // 書き出しビデオのfps
+	string n_video; // 書き出しビデオファイル名
 	string cam_data; // 映像センサファイル名
 	string n_center; // センターサークル画像名
 	string in_param; // 内部パラメータのxmlファイル名
@@ -128,7 +129,7 @@ int main(int argc, char** argv) {
 	Mat h_base = cv::Mat::eye(3, 3, CV_64FC1); // パノラマ平面へのホモグラフィ
 	int n, w, h;
 
-	Mat dist;  // カメラの歪み係数
+	Mat dist; // カメラの歪み係数
 
 	// パノラマ平面の構成
 	int roll = 0;
@@ -136,7 +137,6 @@ int main(int argc, char** argv) {
 	double yaw = 0;
 	Mat A1Matrix = cv::Mat::eye(3, 3, CV_64FC1);
 	Mat A2Matrix = cv::Mat::eye(3, 3, CV_64FC1);
-
 
 	Mat rollMatrix = cv::Mat::eye(3, 3, CV_64FC1);
 	Mat pitchMatrix = cv::Mat::eye(3, 3, CV_64FC1);
@@ -146,44 +146,46 @@ int main(int argc, char** argv) {
 	//	A1Matrix.at<double> (0, 2) = -640;
 	//	A1Matrix.at<double> (1, 2) = -360;
 	//	A1Matrix.at<double> (2, 2) = 1080;
+	//	double tt = (double) cvGetTickCount();
 
-	// GCの内部パラメータの逆行列
-	A1Matrix.at<double> (0, 0) = 1.1107246554597004e-003;
-	A1Matrix.at<double> (0, 2) = -7.0476759105087217e-001;
-	A1Matrix.at<double> (1, 1) = 1.0937849972977411e-003;
-	A1Matrix.at<double> (1, 2) = -4.2040554903081440e-001;
+	/*
+	 // GCの内部パラメータの逆行列
+	 A1Matrix.at<double> (0, 0) = 1.1107246554597004e-003;
+	 A1Matrix.at<double> (0, 2) = -7.0476759105087217e-001;
+	 A1Matrix.at<double> (1, 1) = 1.0937849972977411e-003;
+	 A1Matrix.at<double> (1, 2) = -4.2040554903081440e-001;
 
-	// AQの内部パラメータの逆行列
-	//	A1Matrix.at<double> (0, 0) = 8.1632905612490970e-004;
-	//	A1Matrix.at<double> (0, 2) = -5.2593546441192318e-001;
-	//	A1Matrix.at<double> (1, 1) = 8.1390778599629236e-004;
-	//	A1Matrix.at<double> (1, 2) = -2.7706041350882804e-001;
+	 // AQの内部パラメータの逆行列
+	 //	A1Matrix.at<double> (0, 0) = 8.1632905612490970e-004;
+	 //	A1Matrix.at<double> (0, 2) = -5.2593546441192318e-001;
+	 //	A1Matrix.at<double> (1, 1) = 8.1390778599629236e-004;
+	 //	A1Matrix.at<double> (1, 2) = -2.7706041350882804e-001;
 
-	cout << "<A1>" << endl << A1Matrix.inv() << endl;
+	 cout << "<A1>" << endl << A1Matrix.inv() << endl;
 
-	Mat inv_a1 = A1Matrix.inv();
-	// GCでの仮想パノラマ平面
-	//A2Matrix.at<double> (0, 0) = 900;
-	//A2Matrix.at<double> (1, 1) = 900;
-	//A2Matrix.at<double> (0, 2) = PANO_W / 2;
-	//A2Matrix.at<double> (1, 2) = PANO_H / 2;
+	 Mat inv_a1 = A1Matrix.inv();
+	 // GCでの仮想パノラマ平面
+	 //A2Matrix.at<double> (0, 0) = 900;
+	 //A2Matrix.at<double> (1, 1) = 900;
+	 //A2Matrix.at<double> (0, 2) = PANO_W / 2;
+	 //A2Matrix.at<double> (1, 2) = PANO_H / 2;
 
-	// AQでの仮想パノラマ平面
-	A2Matrix.at<double> (0, 0) = inv_a1.at<double> (0, 0);
-	A2Matrix.at<double> (1, 1) = inv_a1.at<double> (1, 1);
-	A2Matrix.at<double> (0, 2) = PANO_W / 2;
-	A2Matrix.at<double> (1, 2) = PANO_H / 2;
-
-	cout << "<A2>" << endl << A2Matrix << endl;
+	 // AQでの仮想パノラマ平面
+	 A2Matrix.at<double> (0, 0) = inv_a1.at<double> (0, 0);
+	 A2Matrix.at<double> (1, 1) = inv_a1.at<double> (1, 1);
+	 A2Matrix.at<double> (0, 2) = PANO_W / 2;
+	 A2Matrix.at<double> (1, 2) = PANO_H / 2;
+	 */
 
 	try {
 		// コマンドラインオプションの定義
 		options_description opt("Usage");
-		opt.add_options()("cam", value<std::string> (), "動画名やセンサファイル名が記述されたファイルの指定")("center", value<
-				std::string> (), "センター画像の指定")("start,s",
-				value<int> ()->default_value(0), "スタートフレームの指定")("end,e", value<
-				int> ()->default_value(INT_MAX), "終了フレームの指定")("comp", value<bool> ()->default_value(
-				false), "補完の設定")("inter,i", value<int> ()->default_value(9),
+		opt.add_options()("cam", value<std::string> (),
+				"動画名やセンサファイル名が記述されたファイルの指定")("center", value<std::string> (),
+				"センター画像の指定")("start,s", value<int> ()->default_value(0),
+				"スタートフレームの指定")("end,e", value<int> ()->default_value(INT_MAX),
+				"終了フレームの指定")("comp", value<bool> ()->default_value(false),
+				"補完の設定")("inter,i", value<int> ()->default_value(9),
 				"取得フレームの間隔")("blur,b", value<int> ()->default_value(0),
 				"ブラーによるフレームの破棄の閾値")("video,v", value<std::string> (),
 				"書きだす動画ファイル名の指定")("yaw", value<double> ()->default_value(0),
@@ -193,10 +195,10 @@ int main(int argc, char** argv) {
 				value<int> ()->default_value(20), "SURFのhessianの値")("senser",
 				value<bool> ()->default_value(false), "センサー情報の使用")("line",
 				value<bool> ()->default_value(false), "直線検出の利用")("undist",
-				value<bool> ()->default_value(false), "画像のレンズ歪み補正")
-				("outdir,o", value<string> ()->default_value("./"),"各種ファイルの出力先ディレクトリの指定")
-				("in_param", value<string> (),"内部パラメータ(.xml)ファイル名の指定")
-				("help,h", "ヘルプの出力");
+				value<bool> ()->default_value(false), "画像のレンズ歪み補正")("outdir,o",
+				value<string> ()->default_value("./"), "各種ファイルの出力先ディレクトリの指定")(
+				"in_param", value<string> (), "内部パラメータ(.xml)ファイル名の指定")(
+				"help,h", "ヘルプの出力");
 
 		// オプションのマップを作成
 		variables_map vm;
@@ -210,7 +212,7 @@ int main(int argc, char** argv) {
 		}
 
 		// 各種オプションの値を取得
-		if(!vm.count("cam")){
+		if (!vm.count("cam")) {
 			cout << "cam_dataファイル名は必ず指定して下さい" << endl;
 			return -1;
 		}
@@ -225,14 +227,14 @@ int main(int argc, char** argv) {
 			f_video = true;
 		}
 
-		if(vm.count("in_param")){ // 内部パラメータファイル名
-			in_param = vm["in_param"].as<string>();
-		}else{
+		if (vm.count("in_param")) { // 内部パラメータファイル名
+			in_param = vm["in_param"].as<string> ();
+		} else {
 			cout << "内部パラメータファイル名を指定して下さい．" << endl;
 			return -1;
 		}
 
-		if(vm.count("undist") && !vm.count("in_param")){
+		if (vm.count("undist") && !vm.count("in_param")) {
 			cout << "歪み補正をかけるには内部パラメータファイル名を指定して下さい．" << endl;
 			return -1;
 		}
@@ -248,9 +250,9 @@ int main(int argc, char** argv) {
 		yaw = vm["yaw"].as<double> (); // 初期フレーム角度
 		hessian = vm["hessian"].as<int> (); // SURFのhessianパラメータ
 		f_senser = vm["senser"].as<bool> (); // センサ情報の使用/不使用
-		f_undist =  vm["undist"].as<bool> (); // レンズ歪み補正
-		save_dir = vm["outdir"].as<string>();
-
+		f_undist = vm["undist"].as<bool> (); // レンズ歪み補正
+		save_dir = vm["outdir"].as<string> ();
+		f_line = vm["line"].as<bool> ();
 
 	} catch (exception& e) {
 		cerr << "error: " << e.what() << "\n";
@@ -259,6 +261,28 @@ int main(int argc, char** argv) {
 		cerr << "Exception of unknown type!\n";
 		return -1;
 	}
+
+	FileStorage cvfs_inparam(in_param, CV_STORAGE_READ);
+	if (!cvfs_inparam.isOpened()) {
+		cout << "cannt open internal parameta file " << in_param << endl;
+		return -1;
+	}
+	Mat a_tmp;
+	FileNode node_inparam(cvfs_inparam.fs, NULL);
+	read(node_inparam["intrinsic"], a_tmp);
+	if (f_undist) {
+		read(node_inparam["distortion"], dist);
+	}
+	Mat inv_a1 = a_tmp.clone();
+	A1Matrix = a_tmp.inv();
+
+	A2Matrix.at<double> (0, 0) = inv_a1.at<double> (0, 0);
+	A2Matrix.at<double> (1, 1) = inv_a1.at<double> (1, 1);
+	A2Matrix.at<double> (0, 2) = PANO_W / 2;
+	A2Matrix.at<double> (1, 2) = PANO_H / 2;
+
+	cout << "<A1>" << endl << A1Matrix.inv() << endl;
+	cout << "<A2>" << endl << A2Matrix << endl;
 
 	// 映像　センサファイル名を取得
 	if ((SensorFP = fopen(cam_data.c_str(), "r")) == NULL) {
@@ -271,7 +295,7 @@ int main(int argc, char** argv) {
 	fclose(SensorFP);
 
 	ss << save_dir << "log.xml";
-	cvfs.open(ss.str(),cv::FileStorage::WRITE);
+	cvfs.open(ss.str(), cv::FileStorage::WRITE);
 	ss.str("");
 	ss.clear();
 
@@ -296,11 +320,13 @@ int main(int argc, char** argv) {
 		end = FRAME_MAX;
 
 	std::cout << "Video Property : total flame = " << FRAME_MAX << endl;
-	cout << "fps = " << fps << endl;
+	cout << "out put video fps = " << fps << endl;
 
 	// 合成開始フレームまでスキップ
 	if (skip > 1) {
-		cap.set(CV_CAP_PROP_POS_FRAMES, skip);
+		cout << "skip frame to : " << skip << endl;
+		for(int i = 0; i < skip-1;i++)
+			cap >> image;
 		frame_num = skip - 1; // 現在のフレーム位置を設定
 	} else {
 		frame_num = 0;
@@ -323,19 +349,6 @@ int main(int argc, char** argv) {
 		feature->set("nOctaveLayers", 4);
 		feature->set("nOctaves", 3);
 		feature->set("upright", 0);
-	}
-
-	//	double tt = (double) cvGetTickCount();
-	FileStorage cvfs_inparam(in_param,CV_STORAGE_READ);
-	if(!cvfs_inparam.isOpened()){
-		cout << "cannt open internal parameta file " << in_param << endl;
-		return -1;
-	}
-
-	FileNode node_inparam(cvfs_inparam.fs,NULL);
-	read(node_inparam["intrinsic"],A1Matrix);
-	if(f_undist){
-		read(node_inparam["distortion"],dist);
 	}
 
 	// 各種回転をパノラマ平面に適用
@@ -412,7 +425,7 @@ int main(int argc, char** argv) {
 			ifs_time >> time_buf;
 			ifs_time >> s_time; // msec
 
-			cout << "s_time : " << s_time / 1000.0 << "[sec]" << endl;
+			cout << "senser_time : " << s_time / 1000.0 << "[sec]" << endl;
 
 			// 対象フレームのセンサデータを一括読み込み
 			LoadSensorData(sensorfileName, &sensor);
@@ -422,10 +435,12 @@ int main(int argc, char** argv) {
 		if (f_senser) {
 			// 対象フレームの動画の頭からの時間frame_timeに撮影開始時刻s_timeを加算して，実時間に変換
 			double frame_msec = cap.get(CV_CAP_PROP_POS_MSEC) + s_time;
+			cout << "object frame time :" << cap.get(CV_CAP_PROP_POS_MSEC) <<endl;
 			GetSensorDataForTime(frame_msec / 1000.0, &sensor, &obj_sd);
 		}
 
-		cap >> image;
+		cap >> buf;
+		image = buf.clone();
 	}
 
 	cout << cap.get(CV_CAP_PROP_FPS) << "[frame / sec]" << endl;
@@ -437,6 +452,11 @@ int main(int argc, char** argv) {
 		cout << "dist param : " << dist << endl;
 	}
 
+	if(image.empty())
+	{
+		cout << "cannot get frame from video : " << endl;
+		return -1;
+	}
 	w = image.cols;
 	h = image.rows;
 
@@ -462,24 +482,30 @@ int main(int argc, char** argv) {
 	ss.str("");
 
 	// パノラマ動画ファイルを作成
-	if (f_video)
-		VideoWriter.open(n_video.c_str(), CV_FOURCC('D', 'I', 'V', 'X'),
-				(int) fps, cvSize(w, h), 1);
+	if (f_video){
+		ss.str("");
+		ss.clear();
+		ss << save_dir << n_video;
 
+		VideoWriter.open(ss.str(), CV_FOURCC('D', 'I', 'V', 'X'),
+				(int) fps, cvSize(w, h), 1);
+	}
 	// フレームを飛ばす
 	if (!f_center) {
-		for (int i = 0; i < FRAME_T; i++) {
-			cap >> object;
-			frame_num++;
-		}
 		if (f_senser) {
 			// 最初に投影した動画フレームのセンサとフレーム番号，ホモグラフィ行列を記録
 			pano_sds.push_back(obj_sd);
 			vec_n_pano_frames.push_back(frame_num);
 			cout << "pushback background image src frame : " << frame_num
 					<< endl;
-			pano_monographys.push_back(h_base);
+			pano_monographys.push_back(h_base.clone());
 		}
+		for (int i = 0; i < FRAME_T; i++) {
+			cap >> buf;
+			object = buf.clone();
+			frame_num++;
+		}
+
 	}
 
 	// センターサークル画像を用いた場合，センターサークルと動画の最初のフレーム間は
@@ -493,12 +519,18 @@ int main(int argc, char** argv) {
 	long count_blur = 100;
 	double obj_frame_msec;
 	namedWindow("Object Correspond", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
+	namedWindow("detected lines", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
+	namedWindow("object image ", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
+
 
 	while (frame_num < end && frame_num < FRAME_MAX + FRAME_T + 1) {
 
 		while (f_blur) {
 			obj_frame_msec = cap.get(CV_CAP_PROP_POS_MSEC);
-			cap >> object;
+			cout << "object frame : " << obj_frame_msec << "[msec]" << endl;
+			cout << cap.get(CV_CAP_PROP_FPS) << "[frame / sec]" << endl;
+			cap >> buf;
+			object = buf.clone();
 			if (object.empty())
 				break;
 			frame_num++;
@@ -580,27 +612,35 @@ int main(int argc, char** argv) {
 		//object = cvarrToMat(undist_img);
 
 		//undistort(dist_src, object, A1Matrix.inv(), dist);
+		imshow("object image ",object);
+		waitKey(30);
 
 		// 確率的ハフ変換で線を検出し，特徴点抽出のマスクに利用する
 		if (f_line) {
 			Mat hough_src, hough_dst; // ハフ変換の入力と，検出した線の出力先
-			Canny(object, hough_src, 50, 200, 3);
+			cvtColor(object, gray_image, CV_RGB2GRAY);
+			Canny(gray_image, hough_src, 30, 50, 3);
+
+			imshow("detected lines", hough_src);
+			//			waitKey(0);
 
 			hough_dst = Mat(hough_src.size(), CV_8U, Scalar::all(0));
 
 			vector<Vec4i> lines;
-			HoughLinesP(hough_src, lines, 1, CV_PI / 180, 50, 50, 10);
+			HoughLinesP(hough_src, lines, 1, CV_PI / 180, 80, 100, 200);
 
 			for (size_t i = 0; i < lines.size(); i++) {
 				Vec4i l = lines[i];
 				line(hough_dst, Point(l[0], l[1]), Point(l[2], l[3]), Scalar(
 						255, 255, 255), 3, CV_AA);
 			}
-			imshow("detected lines", hough_dst);
-			waitKey(30);
 
 			// 検出した直線を膨張させて，マスク画像を作成
-			dilate(hough_dst, hough_dst, cv::Mat(), cv::Point(-1, -1), 10);
+			Mat t = hough_dst;
+			dilate(t, hough_dst, cv::Mat(), cv::Point(-1, -1), 5);
+
+			imshow("detected lines", hough_dst);
+			waitKey(30);
 
 			cvtColor(object, gray_image, CV_RGB2GRAY);
 			feature->operator ()(gray_image, hough_dst, objectKeypoints,
@@ -616,6 +656,9 @@ int main(int argc, char** argv) {
 		Mat near_homography = h_base.clone();
 		bool f_detect_near = false;
 		if (f_senser) {
+			double dist, min = 1.0;
+			min = 1.0;
+			f_detect_near = false;
 			// 取り出したフレームセンサ情報と秒数を取得
 			double frame_msec = obj_frame_msec + s_time;
 			GetSensorDataForTime(frame_msec / 1000.0, &sensor, &obj_sd);
@@ -633,7 +676,7 @@ int main(int argc, char** argv) {
 			//warpPerspective(Point3d(1, 0, 0), vec1, yawMatrix * pitchMatrix* rollMatrix);
 			vec1 = yawMatrix * pitchMatrix * rollMatrix * (cv::Mat_<double>(3,
 					1) << 1, 0, 0);
-			double dist, min = 0.5;
+
 
 			for (vector<SENSOR_DATA>::iterator sd_it = pano_sds.begin(); sd_it
 					< pano_sds.end(); sd_it++) {
@@ -649,21 +692,20 @@ int main(int argc, char** argv) {
 						+ pow(vec1.at<double> (0, 1) - vec2.at<double> (0, 1),
 								2) + pow(vec1.at<double> (0, 2) - vec2.at<
 						double> (0, 2), 2));
-				//cout << "dist : " << dist << endl;
+				cout << "dist : " << dist << endl;
 				// 近いものがあったらnear_sdを更新
-				if (dist < 0 && dist < min) {
+				if (dist < 0.03 && dist < min) {
 					min = dist;
 					near_sd = (*sd_it);
 					cout << "detect near frame : " << vec_n_pano_frames[i]
 							<< endl;
+
 					f_detect_near = true;
 					near_frame = vec_n_pano_frames[i];
-					near_homography = pano_monographys[i];
+					near_homography = pano_monographys[i].clone();
 				}
 				i++;
 			}
-			min = 0.5;
-			f_detect_near = false;
 
 			// 近いフレームがあったならそのフレームとマッチング
 			// 見つからなかったら，そのフレームのセンサ情報とホモグラフィー行列などを保存
@@ -673,8 +715,14 @@ int main(int argc, char** argv) {
 				cap.set(CV_CAP_PROP_POS_FRAMES, near_frame);
 				//cout << "detect near frame : " << near_sd.TT << " [sec]" << endl;
 				//cout << cap.get(CV_CAP_PROP_POS_FRAMES) << " [frame]" << endl;
-				cap >> image;
+				cap >> buf;
+				image = buf.clone();
 				cap.set(CV_CAP_PROP_POS_FRAMES, tmp_frame_num); // フレーム位置を復元
+
+				if (image.empty()) {
+					cout << "cannnot get near frame" << endl;
+					return -1;
+				}
 
 				// 近いフレームの特徴点抽出を再度実行
 				cvtColor(image, gray_image, CV_RGB2GRAY);
@@ -687,10 +735,12 @@ int main(int argc, char** argv) {
 						<< endl;
 
 			}
+
 		}
 
 		// ここで，近いフレームが見つかっている場合はそのフレームがimageに
 		// 見つかっていない場合は，FRAME_T + a 前のフレームがimageに格納されているはず
+
 		good_matcher(objectDescriptors, imageDescriptors, &objectKeypoints,
 				&imageKeypoints, &matches, &pt1, &pt2);
 
@@ -736,7 +786,8 @@ int main(int argc, char** argv) {
 				est_h_base = est_h_base * homography;
 
 				// 飛ばしたフレームを取得しパノラマ平面へ投影
-				cap >> object;
+				cap >> buf;
+				object = buf.clone();
 				warpPerspective(object, transform_image, est_h_base,
 						object.size());
 
@@ -763,7 +814,8 @@ int main(int argc, char** argv) {
 
 			}
 			// 補完の際に上書きしているのでフレームを再取得
-			cap >> object;
+			cap >> buf;
+			object = buf.clone();
 		}
 
 		n = pt1.size();
@@ -864,7 +916,16 @@ int main(int argc, char** argv) {
 		 */
 		//cout << Mat(pt1) << endl;
 
+
 		h_base = near_homography * homography;
+		/*	if(norm(near_homography - h_base) > 500 ){
+		 cout << "cannot calc homography :" << norm(near_homography - h_base) << endl;
+		 cap >> object;
+		 frame_num++;
+		 h_base = near_homography.clone();
+		 continue;
+
+		 }*/
 		cv::Mat tmp = homography.clone();
 		// 近くのフレームが検出されていたらnear_homographyはそのフレームの合成に使われたホモグラフィ行列が格納されている
 		// 検出されていないなら，直前の合成に使われたホモグラフィ行列が格納されている
@@ -872,7 +933,8 @@ int main(int argc, char** argv) {
 
 		warpPerspective(object, transform_image, h_base, Size(PANO_W, PANO_H));
 		if (!f_detect_near)
-			pano_monographys.push_back(h_base);
+			pano_monographys.push_back(h_base.clone());
+		cout << pano_monographys.size() << endl;
 
 		Mat h2 = h_base;
 		warpPerspective(white_img, pano_black, h2, Size(PANO_W, PANO_H),
@@ -921,7 +983,8 @@ int main(int argc, char** argv) {
 		blur_skip = FRAME_T;
 
 		for (int i = 0; i < FRAME_T; i++) {
-			cap >> object;
+			cap >> buf;
+			object = buf.clone();
 			frame_num++;
 		}
 	}

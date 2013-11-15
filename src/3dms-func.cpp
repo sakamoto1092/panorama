@@ -10,110 +10,115 @@
 
 using namespace cv;
 using namespace std;
-
+#define PANO_W 6000
+#define PANO_H 6000
+cv::Mat pano_count = Mat(Size(PANO_W, PANO_H), CV_32S, Scalar::all(1));
 // ���ĤΥ��󥵥ǡ�����ɽ�������ߤϻ���Ȧ�, ��, ��, ��-north ��ɽ��
-int DispSensorData(SENSOR_DATA sd)
-{
-    fprintf(stderr, "%f %f %f %f ",
-              sd.alpha, sd.beta, sd.gamma, sd.north);
-    fprintf( stderr, "%f\n", sd.TT);
-    
-    return 0;
+int DispSensorData(SENSOR_DATA sd) {
+	fprintf(stderr, "%f %f %f %f ", sd.alpha, sd.beta, sd.gamma, sd.north);
+	fprintf(stderr, "%f\n", sd.TT);
+
+	return 0;
 }
 
 /* flash.dat ���ɤ߹��� */
-int LoadSensorData(char *oridatafile,SENSOR_DATA *sd_array[])
-{ 
-    FILE *fp_ori;
+int LoadSensorData(char *oridatafile, SENSOR_DATA *sd_array[]) {
+	FILE *fp_ori;
 
-    double t1,t2,t3;
+	double t1, t2, t3;
 
-    int i;
-    char cdum[256];
-    
-    SENSOR_DATA *p;
+	int i;
+	char cdum[256];
 
-     if ( ( fp_ori = fopen( oridatafile, "r" ) ) == NULL ){
-        fprintf( stderr , "\nError : Cannot open %s\n\n", oridatafile );
-        exit(0);
-    }
-   
-    //fgets( cdum, 1024, fp); // �����ɤ����Ф�
-    //fgets( cdum, 1024, fp); // �����ɤ����Ф�
-    //fgets( cdum, 1024, fp); // �����ɤ����Ф�
-    
-    p = sd_array[0];
-    for (i=0; i< MAXDATA_3DMS; i++) {
-        fscanf( fp_ori, "%lf,%lf,%lf,%lf",
-                &t1,&(p->alpha), &(p->beta), &(p->gamma));
-        p->north=p->alpha;;
+	SENSOR_DATA *p;
 
-        p->TT = t1/1000.0; // ���л���(��)�λ���
-        //printf("i : %d t1 :%lf \n",i,p->TT);
-        p++;
-    }  
-    fclose(fp_ori);
-    
-    return 0;
+	if ((fp_ori = fopen(oridatafile, "r")) == NULL) {
+		fprintf(stderr, "\nError : Cannot open %s\n\n", oridatafile);
+		exit(0);
+	}
+
+	//fgets( cdum, 1024, fp); // �����ɤ����Ф�
+	//fgets( cdum, 1024, fp); // �����ɤ����Ф�
+	//fgets( cdum, 1024, fp); // �����ɤ����Ф�
+
+	p = sd_array[0];
+	for (i = 0; i < MAXDATA_3DMS; i++) {
+		fscanf(fp_ori, "%lf,%lf,%lf,%lf", &t1, &(p->alpha), &(p->beta),
+				&(p->gamma));
+		p->north = p->alpha;
+		;
+
+		p->TT = t1 / 1000.0; // ���л���(��)�λ���
+		//printf("i : %d t1 :%lf \n",i,p->TT);
+		p++;
+	}
+	fclose(fp_ori);
+
+	return 0;
 }
 
 // ���󥵥ǡ�������֤��ƻ���Υѥ�᡼���򻻽Ф���
-int GetSensorDataForTime(double TT,  // �������
-                         SENSOR_DATA *in_sd_array[], // ���ϥǡ���(����)
-                         SENSOR_DATA *out_sd         // ���ϥǡ���(����ʬ)
-                         )
-{
-    int i=0;
-    double s;
-    SENSOR_DATA *sd0, *sd1;
-    int flag=0;
-    
-    sd0 = in_sd_array[0];
-    sd1 = sd0 + 1;
-    
-    while (sd0->TT < TT) {
-        flag = 1;
-        sd0++;
-        sd1++;
-        i++;
-        if (i > MAXDATA_3DMS) {
-            fprintf(stderr, "OVER MAXDATA\n");
-            exit(0);
-        }
-    }
-    
-    if (flag==0) {
-        out_sd->alpha = sd0->alpha;
-        out_sd->beta = sd0->beta;
-        out_sd->gamma = sd0->gamma;
-        out_sd->north = sd0->north;
-        out_sd->TT = sd0->TT;
-        return 0;
-    }
+int GetSensorDataForTime(double TT, // �������
+		SENSOR_DATA *in_sd_array[], // ���ϥǡ���(����)
+		SENSOR_DATA *out_sd // ���ϥǡ���(����ʬ)
+) {
+	int i = 0;
+	double s;
+	SENSOR_DATA *sd0, *sd1;
+	int flag = 0;
 
-    sd1 = sd0;
-    sd0--;
+	sd0 = in_sd_array[0];
+	sd1 = sd0 + 1;
 
-    //fprintf(stderr, "(%f) < [%f] < (%f)\n",
-    //        sd0->TT, TT,  sd1->TT);
+	while (sd0->TT < TT) {
+		flag = 1;
+		sd0++;
+		sd1++;
+		i++;
+		if (i > MAXDATA_3DMS) {
+			fprintf(stderr, "OVER MAXDATA\n");
+			exit(0);
+		}
+	}
 
-    s = (TT - sd0->TT)/(sd1->TT - sd0->TT);
-    if(sd0->alpha>180)sd0->alpha=sd0->alpha-360;
-    if(sd1->alpha>180)sd1->alpha=sd1->alpha-360;
-    if(sd0-> beta>180)sd0-> beta=sd0-> beta-360;
-    if(sd1-> beta>180)sd1-> beta=sd1-> beta-360;
-    if(sd0->gamma>180)sd0->gamma=sd0->gamma-360;
-    if(sd1->gamma>180)sd1->gamma=sd1->gamma-360;
+	if (flag == 0) {
+		out_sd->alpha = sd0->alpha;
+		out_sd->beta = sd0->beta;
+		out_sd->gamma = sd0->gamma;
+		out_sd->north = sd0->north;
+		out_sd->TT = sd0->TT;
+		return 0;
+	}
 
-    out_sd->alpha = (1-s)*sd0->alpha + s*sd1->alpha;
-    out_sd->beta  = (1-s)*sd0->beta  + s*sd1->beta;
-    out_sd->gamma = (1-s)*sd0->gamma + s*sd1->gamma;
-    out_sd->north = (1-s)*sd0->north + s*sd1->north;
-   out_sd->TT = (1-s)*sd0->TT + s*sd1->TT;
-    //printf("test\n");
-    //DispSensorData(*out_sd);
+	sd1 = sd0;
+	sd0--;
 
-    return 0;
+	//fprintf(stderr, "(%f) < [%f] < (%f)\n",
+	//        sd0->TT, TT,  sd1->TT);
+
+	s = (TT - sd0->TT) / (sd1->TT - sd0->TT);
+	if (sd0->alpha > 180)
+		sd0->alpha = sd0->alpha - 360;
+	if (sd1->alpha > 180)
+		sd1->alpha = sd1->alpha - 360;
+	if (sd0-> beta > 180)
+		sd0-> beta = sd0-> beta - 360;
+	if (sd1-> beta > 180)
+		sd1-> beta = sd1-> beta - 360;
+	if (sd0->gamma > 180)
+		sd0->gamma = sd0->gamma - 360;
+	if (sd1->gamma > 180)
+		sd1->gamma = sd1->gamma - 360;
+
+	out_sd->alpha = (1 - s) * sd0->alpha + s * sd1->alpha;
+	out_sd->beta = (1 - s) * sd0->beta + s * sd1->beta;
+	out_sd->gamma = (1 - s) * sd0->gamma + s * sd1->gamma;
+	out_sd->north = (1 - s) * sd0->north + s * sd1->north;
+	out_sd->TT = (1 - s) * sd0->TT + s * sd1->TT;
+	//printf("test\n");
+	//DispSensorData(*out_sd);
+
+	return 0;
 }
 
 // Tilt :
@@ -282,7 +287,6 @@ void get_histimage(Mat image, Mat *hist_image) {
 	}
 }
 
-
 /*
  *  透視投影変換後の画像をパノラマ平面にマスクを用いて
  *  上書きせずに未投影の領域のみに投影する関数
@@ -294,6 +298,7 @@ void get_histimage(Mat image, Mat *hist_image) {
  *
  *  （＊maskは処理後に更新されて返される）
  */
+
 void make_pano(Mat src, Mat dst, Mat mask, Mat roi) {
 
 	//サイズの一致を確認
@@ -302,15 +307,24 @@ void make_pano(Mat src, Mat dst, Mat mask, Mat roi) {
 		int w = src.cols;
 		for (int i = 0; i < w; i++) {
 			for (int j = 0; j < h; j++) {
+				if (mask.at<unsigned char> (j, i) == 255	&& roi.at<unsigned char> (j, i) == 255) {
+					Vec3f  a = dst.at<Vec3b> (j, i);
+					Vec3f  b = src.at<Vec3b> (j, i);
+					dst.at<Vec3b> (j, i) = (a
+							* pano_count.at<float> (j, i)
+							+ b) / (pano_count.at<float> (j,
+							i) + 1.0);
+				}
 				if (mask.at<unsigned char> (j, i) == 0) {
-
 					dst.at<Vec3b> (j, i) = src.at<Vec3b> (j, i);
 					if (roi.at<unsigned char> (j, i) == 255)
 						mask.at<unsigned char> (j, i) = roi.at<unsigned char> (
 								j, i);
 				}
+				pano_count.at<float> (j, i)++;
 			}
 		}
+
 	}
 }
 
@@ -328,8 +342,8 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 		vector<KeyPoint> *key2, std::vector<cv::DMatch> *matches, vector<
 				Point2f> *pt1, vector<Point2f> *pt2) {
 
-	//FlannBasedMatcher matcher;
-	BFMatcher matcher(cv::NORM_L2, true);
+	FlannBasedMatcher matcher;
+	//BFMatcher matcher(cv::NORM_L2, true);
 	vector<std::vector<cv::DMatch> > matches12, matches21;
 	std::vector<cv::DMatch> tmp_matches;
 	int knn = 1;
@@ -337,28 +351,31 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 	matcher.match(descriptors1, descriptors2, tmp_matches);
 
 	cout << key1->size() << endl;
-	/*
-	 matcher.knnMatch(descriptors1, descriptors2, matches12, knn);
-	 matcher.knnMatch(descriptors2, descriptors1, matches21, knn);
-	 tmp_matches.clear();
-	 // KNN探索で，1->2と2->1が一致するものだけがマッチしたとみなされる
-	 for (size_t m = 0; m < matches12.size(); m++) {
-	 bool findCrossCheck = false;
-	 for (size_t fk = 0; fk < matches12[m].size(); fk++) {
-	 cv::DMatch forward = matches12[m][fk];
-	 for (size_t bk = 0; bk < matches21[forward.trainIdx].size(); bk++) {
-	 cv::DMatch backward = matches21[forward.trainIdx][bk];
-	 if (backward.trainIdx == forward.queryIdx) {
-	 tmp_matches.push_back(forward);
-	 findCrossCheck = true;
-	 break;
-	 }
-	 }
-	 if (findCrossCheck)
-	 break;
-	 }
-	 }
-	 */
+	cout << key2->size() << endl;
+	cout << descriptors1.size() << endl;
+	cout << descriptors2.size() << endl;
+
+	matcher.knnMatch(descriptors1, descriptors2, matches12, knn);
+	matcher.knnMatch(descriptors2, descriptors1, matches21, knn);
+	tmp_matches.clear();
+	// KNN探索で，1->2と2->1が一致するものだけがマッチしたとみなされる
+	for (size_t m = 0; m < matches12.size(); m++) {
+		bool findCrossCheck = false;
+		for (size_t fk = 0; fk < matches12[m].size(); fk++) {
+			cv::DMatch forward = matches12[m][fk];
+			for (size_t bk = 0; bk < matches21[forward.trainIdx].size(); bk++) {
+				cv::DMatch backward = matches21[forward.trainIdx][bk];
+				if (backward.trainIdx == forward.queryIdx) {
+					tmp_matches.push_back(forward);
+					findCrossCheck = true;
+					break;
+				}
+			}
+			if (findCrossCheck)
+				break;
+		}
+	}
+
 	cout << "matches : " << tmp_matches.size() << endl;
 	double min_dist = DBL_MAX;
 	for (int i = 0; i < (int) tmp_matches.size(); i++) {
@@ -377,7 +394,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 		if (round((*key1)[tmp_matches[i].queryIdx].class_id) == round(
 				(*key2)[tmp_matches[i].trainIdx].class_id)) {
 			if (tmp_matches[i].distance > 0 && tmp_matches[i].distance
-					< (min_dist + 1) * 3) {
+					< (min_dist+0.1) * 3) {
 				//		  &&	(fabs(objectKeypoints[matches[i].queryIdx].pt.y - imageKeypoints[matches[i].trainIdx].pt.y)
 				//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
 				//				cout << "i : " << i << endl;
