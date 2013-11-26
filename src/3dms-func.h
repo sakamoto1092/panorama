@@ -88,4 +88,4 @@ void make_pano(Mat src, Mat dst, Mat mask, Mat roi);
  */
 void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 		vector<KeyPoint> *key2, std::vector<cv::DMatch> *matches, vector<
-				Point2f> *pt1, vector<Point2f> *pt2);
+				Point2d> *pt1, vector<Point2d> *pt2);
