@@ -287,15 +287,15 @@ int main(int argc, char** argv) {
 	if (f_undist) {
 		read(node_inparam["distortion"], dist);
 	}
-	Mat inv_a1 = a_tmp.clone();
-	A1Matrix = a_tmp.inv();
+	//Mat inv_a1 = a_tmp.clone();
+	A1Matrix = a_tmp.clone();
 
-	A2Matrix.at<double> (0, 0) = inv_a1.at<double> (0, 0);
-	A2Matrix.at<double> (1, 1) = inv_a1.at<double> (1, 1);
+	A2Matrix.at<double> (0, 0) = A1Matrix.at<double> (0, 0);
+	A2Matrix.at<double> (1, 1) = A1Matrix.at<double> (1, 1);
 	A2Matrix.at<double> (0, 2) = PANO_W / 2;
 	A2Matrix.at<double> (1, 2) = PANO_H / 2;
 
-	cout << "<A1>" << endl << A1Matrix.inv() << endl;
+	cout << "<A1>" << endl << A1Matrix << endl;
 	cout << "<A2>" << endl << A2Matrix << endl;
 
 	// 映像　センサファイル名を取得
@@ -371,7 +371,7 @@ int main(int argc, char** argv) {
 	SetYawRotationMatrix(&yawMatrix, (double) yaw);
 
 	// 最終的なパノラマ平面へのホモグラフィ行列を計算
-	h_base = A2Matrix * rollMatrix * pitchMatrix * yawMatrix * A1Matrix;
+	h_base = A2Matrix * rollMatrix * pitchMatrix * yawMatrix * A1Matrix.inv();
 
 	cout << "<h_base>" << endl << h_base << endl;
 
@@ -876,7 +876,7 @@ int main(int argc, char** argv) {
 
 		// 特異値分解を用いた回転行列の推定
 
-
+/*
 		x = Mat(Size(pt1.size(), 3), CV_64F, Scalar(1));
 		y = Mat(Size(pt2.size(), 3), CV_64F, Scalar(1));
 		tmp_pt1 = Mat(pt1).reshape(1).t();
@@ -905,8 +905,10 @@ int main(int argc, char** argv) {
 		H = Mat::eye(3, 3, CV_64F);
 		H.at<double> (2, 2) = determinant(est_R);
 
-		est_R = svd_v * H * svd_ut;
+		est_R = Mat(svd_v * H * svd_ut).t();
+
 		cout << "< estimated rotation matrix > " << endl << est_R << endl;
+		*/
 		/*
 		cout << "< estimated rotation matrix > " << endl << est_R << endl;
 
@@ -1017,12 +1019,12 @@ int main(int argc, char** argv) {
 		// 近くのフレームが検出されていたらnear_homographyはそのフレームの合成に使われたホモグラフィ行列が格納されている
 		// 検出されていないなら，直前の合成に使われたホモグラフィ行列が格納されている
 
-		/*
-		 warpPerspective(object, transform_image, near_homography * est_R, Size(
+
+		 warpPerspective(object, transform_image, near_homography * homography, Size(
 		 PANO_W, PANO_H), CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
 
 
-		 warpPerspective(white_img, pano_black, near_homography * est_R, Size(
+		 warpPerspective(white_img, pano_black, near_homography * homography, Size(
 		 PANO_W, PANO_H), CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
 
 		 // ここまでに作成してきたパノラマ画像の複製を生成
@@ -1031,7 +1033,7 @@ int main(int argc, char** argv) {
 		 // 複製に対して計算したホモグラフィ行列で試しに射影してみる
 		 //make_pano(transform_image, test_img, mask, pano_black);
 		 imshow("Object Correspond", test_img);
-		 */
+
 		// 直前のフレームを合成に使ったホモグラフィ行列と今回推定したホモグラフィ行列との差の行列式を計算
 		cout << "det(homography) : " << determinant(tmp - homography) << endl;
 
@@ -1202,16 +1204,16 @@ int main(int argc, char** argv) {
 		 }
 
 		 }*/
-		warpPerspective(object, transform_image, near_homography * est_R, Size(
+		warpPerspective(object, transform_image, near_homography * homography, Size(
 				PANO_W, PANO_H), CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
 
-		warpPerspective(white_img, pano_black, near_homography * est_R, Size(
+		warpPerspective(white_img, pano_black, near_homography * homography, Size(
 				PANO_W, PANO_H), CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
 		imshow("detected lines", pano_black);
 		make_pano(transform_image, transform_image2, mask, pano_black);
 		//tmp = homography.clone();
 
-		h_base = near_homography * est_R;
+		h_base = near_homography * homography;
 		if (!f_detect_near)
 			pano_monographys.push_back(h_base.clone());
 		cout << pano_monographys.size() << endl;

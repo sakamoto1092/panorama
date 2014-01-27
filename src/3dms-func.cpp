@@ -22,7 +22,7 @@ int DispSensorData(SENSOR_DATA sd) {
 }
 
 /* flash.dat ���ɤ߹��� */
-int LoadSensorData(char *oridatafile, SENSOR_DATA *sd_array[]) {
+int LoadSensorData(const char *oridatafile, SENSOR_DATA *sd_array[]) {
 	FILE *fp_ori;
 
 	double t1, t2, t3;
