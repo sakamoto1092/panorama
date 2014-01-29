@@ -10,7 +10,8 @@
 
 using namespace cv;
 using namespace std;
-#define PANO_W 12000
+//#define PANO_W 12000
+#define PANO_W 6000
 #define PANO_H 3000
 cv::Mat pano_count = Mat(Size(PANO_W, PANO_H), CV_32S, Scalar::all(1));
 // ���ĤΥ��󥵥ǡ�����ɽ�������ߤϻ���Ȧ�, ��, ��, ��-north ��ɽ��
@@ -312,13 +313,13 @@ void make_pano(Mat src, Mat dst, Mat mask, Mat roi) {
 		int w = src.cols;
 		for (int i = 0; i < w; i++) {
 			for (int j = 0; j < h; j++) {
-				if (mask.at<unsigned char> (j, i) == 255	&& roi.at<unsigned char> (j, i) == 255) {
-					Vec3f  a = dst.at<Vec3b> (j, i);
-					Vec3f  b = src.at<Vec3b> (j, i);
-					dst.at<Vec3b> (j, i) = (a
-							* pano_count.at<float> (j, i)
-							+ b) / (pano_count.at<float> (j,
-							i) + 1.0);
+				if (mask.at<unsigned char> (j, i) == 255
+						&& roi.at<unsigned char> (j, i) == 255) {
+					Vec3f a = dst.at<Vec3b> (j, i);
+					Vec3f b = src.at<Vec3b> (j, i);
+					dst.at<Vec3b> (j, i)
+							= (a * pano_count.at<float> (j, i) + b)
+									/ (pano_count.at<float> (j, i) + 1.0);
 				}
 				if (mask.at<unsigned char> (j, i) == 0) {
 					dst.at<Vec3b> (j, i) = src.at<Vec3b> (j, i);
@@ -347,8 +348,8 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 		vector<KeyPoint> *key2, std::vector<cv::DMatch> *matches, vector<
 				Point2d> *pt1, vector<Point2d> *pt2) {
 
-	//FlannBasedMatcher matcher;
-	BFMatcher matcher(cv::NORM_L2, true);
+	FlannBasedMatcher matcher;
+	//BFMatcher matcher(cv::NORM_L2, true);
 	vector<std::vector<cv::DMatch> > matches12, matches21;
 	std::vector<cv::DMatch> tmp_matches;
 	int knn = 1;
@@ -359,7 +360,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 	cout << key2->size() << endl;
 	cout << descriptors1.size() << endl;
 	cout << descriptors2.size() << endl;
-/*
+
 	matcher.knnMatch(descriptors1, descriptors2, matches12, knn);
 	matcher.knnMatch(descriptors2, descriptors1, matches21, knn);
 	tmp_matches.clear();
@@ -380,7 +381,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 				break;
 		}
 	}
-*/
+
 	cout << "matches : " << tmp_matches.size() << endl;
 	double min_dist = DBL_MAX;
 	for (int i = 0; i < (int) tmp_matches.size(); i++) {
@@ -399,7 +400,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 		if (round((*key1)[tmp_matches[i].queryIdx].class_id) == round(
 				(*key2)[tmp_matches[i].trainIdx].class_id)) {
 			if (tmp_matches[i].distance > 0 && tmp_matches[i].distance
-					< (min_dist + 0.01) * 3) {
+					< (min_dist + 0.1) * 3) {
 				//		  &&	(fabs(objectKeypoints[matches[i].queryIdx].pt.y - imageKeypoints[matches[i].trainIdx].pt.y)
 				//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
 				//				cout << "i : " << i << endl;
