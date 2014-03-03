@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/time.h>
 #include<opencv2/nonfree/nonfree.hpp>
 #include<opencv2/nonfree/features2d.hpp>
 #include <sstream>
@@ -113,16 +114,8 @@ int main(int argc, char** argv) {
 	// 各種アルゴリズムによる特徴点検出および特徴量記述
 	string algorithm_type;
 	Ptr<Feature2D> feature;
-	//Ptr<PyramidAdaptedFeatureDetector> feature;
 	int hessian;
-	// SIFT
-	//SIFT feature;
 
-	// SURF
-	//	SURF feature(5, 3, 4, true);
-
-	// ORB
-	//ORB featur;
 
 
 	// 対応点の対の格納先
@@ -189,6 +182,14 @@ int main(int argc, char** argv) {
 	 A2Matrix.at<double> (0, 2) = PANO_W / 2;
 	 A2Matrix.at<double> (1, 2) = PANO_H / 2;
 	 */
+	time_t timer;          // 日付取得用
+	struct tm *local;       // 日付取得用
+
+	struct timeval t0, t1; // 処理時間計算用変数 t0:start t1:end
+
+	timer = time(NULL);			// 現在時間の取得
+	local = localtime(&timer);  // 地方時間に変換
+	gettimeofday(&t0,NULL); // 開始時刻の取得
 
 	try {
 		// コマンドラインオプションの定義
@@ -370,6 +371,12 @@ int main(int argc, char** argv) {
 		feature->set("nOctaveLayers", 4);
 		feature->set("nOctaves", 3);
 		feature->set("upright", 0);
+	}else if(algorithm_type.compare("SIFT") == 0){
+		//feature->set("nfeatures", 0);
+		feature->set("nOctaveLayers", 10);
+		feature->set("contrastThreshold", 0.02);
+		feature->set("edgeThreshold", 20);
+		feature->set("sigma", 2.0);
 	}
 
 	// 各種回転をパノラマ平面に適用
@@ -407,14 +414,18 @@ int main(int argc, char** argv) {
 	else
 		log << 1 << endl;
 	log << "<deblur>" << endl << blur << endl;
-	log << "<start>" << endl << skip << endl;
-	log << "<end>" << endl << end << endl;
+	log << "<start frame>" << endl << skip << endl;
+	log << "<end frame>" << endl << end << endl;
 	log << "<inter>" << endl << FRAME_T << endl;
 	log << "<Algorithm> " << endl << algorithm_type << endl;
 	log << "<Algorithm Param>" << endl;
 	for (int ii = 0; ii < v_log_str.size(); ii++)
 		log << v_log_str[ii] << " " << feature->getDouble(v_log_str[ii])
 				<< endl;
+	log << "<start_time>" << endl  << local->tm_year + 1900 << "/" << local->tm_mon + 1 << "/" <<  local->tm_mday
+			 <<	" " << local->tm_hour << ":" << local->tm_min << ":" << local->tm_sec << " "
+			 <<  local->tm_isdst << endl;;
+
 	/*end of logging*/
 
 	// センサ情報の領域確保
@@ -570,49 +581,49 @@ int main(int argc, char** argv) {
 
 		// ブラーがかかっていないフレーム画像を選択
 		//（ブラーによる判定をしない場合はここではループしない）
-		/*while (f_blur) {
-		 obj_frame_msec = cap.get(CV_CAP_PROP_POS_MSEC);
-		 cout << "object frame : " << obj_frame_msec << "[msec]" << endl;
-		 cout << cap.get(CV_CAP_PROP_FPS) << "[frame / sec]" << endl;
-		 cap >> buf;
+		while (f_blur) {
+			obj_frame_msec = cap.get(CV_CAP_PROP_POS_MSEC);
+			cout << "object frame : " << obj_frame_msec << "[msec]" << endl;
+			cout << cap.get(CV_CAP_PROP_FPS) << "[frame / sec]" << endl;
+			cap >> buf;
 
-		 if(f_undist)
+			if (f_undist)
+				undistort(buf, object, A1Matrix, dist);
+			else
+				object = buf.clone();
+			frame_num++;
+			if (object.empty())
+				break;
+
+			printf("\nframe=%d\n", frame_num);
+			cvtColor(object, gray_image, CV_RGB2GRAY);
+			//cv::Laplacian(gray_image, tmp_img, CV_16S, 3);
+			//Canny(object, sobel_img, 50, 200);
+			cv::Sobel(gray_image, tmp_img, CV_32F, 1, 1);
+			cv::convertScaleAbs(tmp_img, sobel_img, 1, 0);
+
+			cv::Mat_<float>::iterator it = sobel_img.begin<float> ();
+			long count = 0;
+			for (; it != sobel_img.end<float> (); ++it) {
+				if ((*it) > 150)
+					count++;
+			}
+			cout << "edge : " << count << endl;
+			if (count > blur)
+				f_blur = false;
+			count = 0;
+		}
+
+		f_blur = true;
+
+		/*
+		 cap >> buf;
+		 if (f_undist)
 		 undistort(buf, object, A1Matrix, dist);
 		 else
 		 object = buf.clone();
-
-		 if (object.empty())
-		 break;
-
 		 frame_num++;
-
-		 printf("\nframe=%d\n", frame_num);
-		 cvtColor(object, gray_image, CV_RGB2GRAY);
-		 //cv::Laplacian(gray_image, tmp_img, CV_16S, 3);
-		 //Canny(object, sobel_img, 50, 200);
-		 cv::Sobel(gray_image, tmp_img, CV_32F, 1, 1);
-		 cv::convertScaleAbs(tmp_img, sobel_img, 1, 0);
-
-		 cv::Mat_<float>::iterator it = sobel_img.begin<float> ();
-		 long count = 0;
-		 for (; it != sobel_img.end<float> (); ++it) {
-		 if ((*it) > 150)
-		 count++;
-		 }
-		 cout << "edge : " << count << endl;
-		 if (count > blur)
-		 f_blur = false;
-		 count = 0;
-		 }
 		 */
-		//f_blur = true;
-		cap >> buf;
-		if (f_undist)
-			undistort(buf, object, A1Matrix, dist);
-		else
-			object = buf.clone();
-		frame_num++;
-
 		// 動画のフレームが取得出来なかったらbreak
 		if (object.empty())
 			break;
@@ -657,8 +668,6 @@ int main(int argc, char** argv) {
 			 * */
 
 		}
-
-
 
 		//undistort(dist_src, object, A1Matrix.inv(), dist);
 		imshow("object image ", object);
@@ -891,6 +900,7 @@ int main(int argc, char** argv) {
 			printf("frame_num = %d\n", frame_num);
 		}
 
+
 		warpPerspective(object, transform_image, near_homography * homography,
 				Size(PANO_W, PANO_H), CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
 
@@ -978,6 +988,14 @@ int main(int argc, char** argv) {
 	imwrite(ss.str(), mask);
 	ss.str("");
 	ss.clear();
+
+	gettimeofday(&t1,NULL); // 開始時刻の取得
+	log << "<processing_start>" << "\n" << t0.tv_sec << "." << t0.tv_usec << "[sec]" << endl;
+	log << "<processing_end>" << "\n" << t1.tv_sec << "." << t1.tv_usec << "[sec]" << endl;
+	if(t1.tv_usec < t0.tv_usec)
+		log << "<processing_time>" << "\n" << t1.tv_sec-t0.tv_sec - 1.0<< "." << 1000000 + t1.tv_usec-t0.tv_usec << "[sec]" << endl;
+	else
+		log << "<processing_time>" << "\n" << t1.tv_sec-t0.tv_sec << "." <<  t1.tv_usec-t0.tv_usec << "[sec]" << endl;
 
 	return 0;
 }

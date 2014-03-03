@@ -354,7 +354,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 	std::vector<cv::DMatch> tmp_matches;
 	int knn = 1;
 	//BFMatcher matcher(cv::NORM_HAMMING, true);
-	matcher.match(descriptors1, descriptors2, tmp_matches);
+	//matcher.match(descriptors1, descriptors2, tmp_matches);
 
 	cout << key1->size() << endl;
 	cout << key2->size() << endl;
@@ -400,7 +400,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 		if (round((*key1)[tmp_matches[i].queryIdx].class_id) == round(
 				(*key2)[tmp_matches[i].trainIdx].class_id)) {
 			if (tmp_matches[i].distance > 0 && tmp_matches[i].distance
-					< (min_dist + 0.1) * 3) {
+					< (min_dist + 0.1) * 10) {
 				//		  &&	(fabs(objectKeypoints[matches[i].queryIdx].pt.y - imageKeypoints[matches[i].trainIdx].pt.y)
 				//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
 				//				cout << "i : " << i << endl;
