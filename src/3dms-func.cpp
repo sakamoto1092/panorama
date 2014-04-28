@@ -4,8 +4,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <cv.h>
-#include <highgui.h>
+#include<opencv.hpp>
+#include<opencv2/gpu/gpu.hpp>
 #include "3dms-func.h"
 
 using namespace cv;
@@ -14,6 +14,11 @@ using namespace std;
 #define PANO_W 6000
 #define PANO_H 3000
 cv::Mat pano_count = Mat(Size(PANO_W, PANO_H), CV_32S, Scalar::all(1));
+
+vector<vector<Vec4i> > color_map(PANO_H * PANO_W, vector<Vec4i>()); // パノラマの各画素にどんな色が出てきたかを格納する
+//vector<vector<int> > color_map_counter(PANO_H * PANO_W, vector<int>(1)); // パノラマの各画素の各色が何回出てきたかを数えるカウンタ
+//vector<vector<Vec3b> > color_map(PANO_H*PANO_W,vector<Vec4b>());
+
 // ���ĤΥ��󥵥ǡ�����ɽ�������ߤϻ���Ȧ�, ��, ��, ��-north ��ɽ��
 int DispSensorData(SENSOR_DATA sd) {
 	fprintf(stderr, "%f %f %f %f ", sd.alpha, sd.beta, sd.gamma, sd.north);
@@ -62,7 +67,7 @@ int LoadSensorData(const char *oridatafile, SENSOR_DATA *sd_array[]) {
 int GetSensorDataForTime(double TT, // �������
 		SENSOR_DATA *in_sd_array[], // ���ϥǡ���(����)
 		SENSOR_DATA *out_sd // ���ϥǡ���(����ʬ)
-) {
+		) {
 	int i = 0;
 	double s;
 	SENSOR_DATA *sd0, *sd1;
@@ -102,10 +107,10 @@ int GetSensorDataForTime(double TT, // �������
 		sd0->alpha = sd0->alpha - 360;
 	if (sd1->alpha > 180)
 		sd1->alpha = sd1->alpha - 360;
-	if (sd0-> beta > 180)
-		sd0-> beta = sd0-> beta - 360;
-	if (sd1-> beta > 180)
-		sd1-> beta = sd1-> beta - 360;
+	if (sd0->beta > 180)
+		sd0->beta = sd0->beta - 360;
+	if (sd1->beta > 180)
+		sd1->beta = sd1->beta - 360;
 	if (sd0->gamma > 180)
 		sd0->gamma = sd0->gamma - 360;
 	if (sd1->gamma > 180)
@@ -127,10 +132,10 @@ int SetTiltRotationMatrix(Mat *tiltMatrix, double tilt_deg) {
 	double tilt_angle;
 
 	tilt_angle = tilt_deg / 180.0 * M_PI;
-	(*tiltMatrix).at<double> (1, 1) = cos(tilt_angle);
-	(*tiltMatrix).at<double> (1, 2) = -sin(tilt_angle);
-	(*tiltMatrix).at<double> (2, 1) = sin(tilt_angle);
-	(*tiltMatrix).at<double> (2, 2) = cos(tilt_angle);
+	(*tiltMatrix).at<double>(1, 1) = cos(tilt_angle);
+	(*tiltMatrix).at<double>(1, 2) = -sin(tilt_angle);
+	(*tiltMatrix).at<double>(2, 1) = sin(tilt_angle);
+	(*tiltMatrix).at<double>(2, 2) = cos(tilt_angle);
 
 	//	cvmSet(tiltMatrix, 1, 1, cos(tilt_angle));
 	//	cvmSet(tiltMatrix, 1, 2, -sin(tilt_angle));
@@ -143,10 +148,10 @@ int SetPanRotationMatrix(Mat *panMatrix, double pan_deg) {
 	double pan_angle;
 	pan_angle = pan_deg / 180.0 * M_PI;
 
-	(*panMatrix).at<double> (2, 2) = cos(pan_angle);
-	(*panMatrix).at<double> (2, 0) = -sin(pan_angle);
-	(*panMatrix).at<double> (0, 2) = sin(pan_angle);
-	(*panMatrix).at<double> (0, 0) = cos(pan_angle);
+	(*panMatrix).at<double>(2, 2) = cos(pan_angle);
+	(*panMatrix).at<double>(2, 0) = -sin(pan_angle);
+	(*panMatrix).at<double>(0, 2) = sin(pan_angle);
+	(*panMatrix).at<double>(0, 0) = cos(pan_angle);
 	//	cvmSet(panMatrix, 2, 2, cos(pan_angle));
 	//	cvmSet(panMatrix, 2, 0, -sin(pan_angle));
 	//	cvmSet(panMatrix, 0, 2, sin(pan_angle));
@@ -159,10 +164,10 @@ int SetRollRotationMatrix(Mat *rollMatrix, double roll_deg) {
 	double roll_angle;
 
 	roll_angle = roll_deg / 180.0 * M_PI;
-	(*rollMatrix).at<double> (0, 0) = cos(roll_angle);
-	(*rollMatrix).at<double> (0, 1) = -sin(roll_angle);
-	(*rollMatrix).at<double> (1, 0) = sin(roll_angle);
-	(*rollMatrix).at<double> (1, 1) = cos(roll_angle);
+	(*rollMatrix).at<double>(0, 0) = cos(roll_angle);
+	(*rollMatrix).at<double>(0, 1) = -sin(roll_angle);
+	(*rollMatrix).at<double>(1, 0) = sin(roll_angle);
+	(*rollMatrix).at<double>(1, 1) = cos(roll_angle);
 	//	cvmSet(rollMatrix, 0, 0, cos(roll_angle));
 	//	cvmSet(rollMatrix, 0, 1, -sin(roll_angle));
 	//	cvmSet(rollMatrix, 1, 0, sin(roll_angle));
@@ -175,10 +180,10 @@ int SetPitchRotationMatrix(Mat *pitchMatrix, double pitch_deg) {
 	double pitch_angle;
 
 	pitch_angle = pitch_deg / 180.0 * M_PI;
-	(*pitchMatrix).at<double> (1, 1) = cos(pitch_angle);
-	(*pitchMatrix).at<double> (1, 2) = -sin(pitch_angle);
-	(*pitchMatrix).at<double> (2, 1) = sin(pitch_angle);
-	(*pitchMatrix).at<double> (2, 2) = cos(pitch_angle);
+	(*pitchMatrix).at<double>(1, 1) = cos(pitch_angle);
+	(*pitchMatrix).at<double>(1, 2) = -sin(pitch_angle);
+	(*pitchMatrix).at<double>(2, 1) = sin(pitch_angle);
+	(*pitchMatrix).at<double>(2, 2) = cos(pitch_angle);
 	//	cvmSet(pitchMatrix, 1, 1, cos(pitch_angle));
 	//	cvmSet(pitchMatrix, 1, 2, -sin(pitch_angle));
 	//	cvmSet(pitchMatrix, 2, 1, sin(pitch_angle));
@@ -191,10 +196,10 @@ int SetYawRotationMatrix(Mat *yawMatrix, double yaw_deg) {
 	double yaw_angle;
 
 	yaw_angle = yaw_deg / 180.0 * M_PI;
-	(*yawMatrix).at<double> (2, 2) = cos(yaw_angle);
-	(*yawMatrix).at<double> (2, 0) = -sin(yaw_angle);
-	(*yawMatrix).at<double> (0, 2) = sin(yaw_angle);
-	(*yawMatrix).at<double> (0, 0) = cos(yaw_angle);
+	(*yawMatrix).at<double>(2, 2) = cos(yaw_angle);
+	(*yawMatrix).at<double>(2, 0) = -sin(yaw_angle);
+	(*yawMatrix).at<double>(0, 2) = sin(yaw_angle);
+	(*yawMatrix).at<double>(0, 0) = cos(yaw_angle);
 	//	cvmSet(yawMatrix, 2, 2, cos(yaw_angle));
 	//	cvmSet(yawMatrix, 2, 0, -sin(yaw_angle));
 	//	cvmSet(yawMatrix, 0, 2, sin(yaw_angle));
@@ -204,9 +209,9 @@ int SetYawRotationMatrix(Mat *yawMatrix, double yaw_deg) {
 
 void setHomographyReset(Mat* homography) {
 	cvZero(homography);
-	(*homography).at<double> (0, 0) = 1;
-	(*homography).at<double> (1, 1) = 1;
-	(*homography).at<double> (2, 2) = 1;
+	(*homography).at<double>(0, 0) = 1;
+	(*homography).at<double>(1, 1) = 1;
+	(*homography).at<double>(2, 2) = 1;
 	//cvmSet(homography, 0, 0, 1);
 	//cvmSet(homography, 1, 1, 1);
 	//cvmSet(homography, 2, 2, 1);
@@ -215,7 +220,7 @@ void setHomographyReset(Mat* homography) {
 double compareSURFDescriptors(const float* d1, const float* d2, double best,
 		int length) {
 	double total_cost = 0;
-	assert( length % 4 == 0 );
+	assert(length % 4 == 0);
 	for (int i = 0; i < length; i += 4) {
 		double t0 = d1[i] - d2[i];
 		double t1 = d1[i + 1] - d2[i + 1];
@@ -238,7 +243,6 @@ void get_histimage(Mat image, Mat *hist_image) {
 	int channels[] = { 0 }; // ヒストグラムを求めるチャネル指定
 	int dims = 1; // 求めるヒストグラムの数
 
-
 	float max_dev = FLT_MIN, min_dev = FLT_MAX; // エッジ画像におけるヒストグラムの分散のmin max
 	float max_mean = FLT_MIN, min_mean = FLT_MAX; // エッジ画像におけるヒストグラムの平均のmin max
 	float sum_mean = 0.0;
@@ -257,7 +261,7 @@ void get_histimage(Mat image, Mat *hist_image) {
 					true, false);
 
 			meanStdDev(hist, mean, dev);
-			count.at<float> (i, j) = dev[0];
+			count.at<float>(i, j) = dev[0];
 
 			if (dev[0] < min_dev)
 				min_dev = dev[0];
@@ -270,16 +274,18 @@ void get_histimage(Mat image, Mat *hist_image) {
 				max_mean = mean[0];
 
 			sum_mean += mean[0];
-			std::cout << "count : " << mean << std::endl;
+			//std::cout << "count : " << mean << std::endl;
 
 			minMaxLoc(hist, NULL, &max_value, NULL, NULL);
 			hist *= hist_image[i * 10 + j].rows / max_value;
 			bin_w = cvRound((double) 260 / 256);
 
 			for (int k = 0; k < 256; k++)
-				rectangle(hist_image[i * 10 + j], Point(k * bin_w, hist_image[i
-						* 10 + j].rows), cvPoint((k + 1) * bin_w, hist_image[i
-						* 10 + j].rows - cvRound(hist.at<float> (k))),
+				rectangle(hist_image[i * 10 + j],
+						Point(k * bin_w, hist_image[i * 10 + j].rows),
+						cvPoint((k + 1) * bin_w,
+								hist_image[i * 10 + j].rows
+										- cvRound(hist.at<float>(k))),
 						cvScalarAll(0), -1, 8, 0);
 
 			// ヒストグラムを計算した部分の画像を切り出して
@@ -307,63 +313,94 @@ void get_histimage(Mat image, Mat *hist_image) {
 
 void make_pano(Mat src, Mat dst, Mat mask, Mat roi) {
 
+	Vec3f a,b;
 	//サイズの一致を確認
 	if (src.cols == dst.cols && src.rows == dst.rows) {
 		int h = src.rows;
 		int w = src.cols;
 		for (int i = 0; i < w; i++) {
 			for (int j = 0; j < h; j++) {
-				if (mask.at<unsigned char> (j, i) == 255
-						&& roi.at<unsigned char> (j, i) == 255) {
-					Vec3f a = dst.at<Vec3b> (j, i);
-					Vec3f b = src.at<Vec3b> (j, i);
-					dst.at<Vec3b> (j, i)
-							= (a * pano_count.at<float> (j, i) + b)
-									/ (pano_count.at<float> (j, i) + 1.0);
+				if (mask.at<unsigned char>(j, i) == 255&& roi.at<unsigned char>(j, i) == 255) {
+					// 書き込みたい画素位置にすでに画素が書き込まれていた場合
+					a = dst.at<Vec3b>(j, i);
+					b = src.at<Vec3b>(j, i);
+					dst.at<Vec3b>(j, i) = (a * pano_count.at<int>(j, i) + b)
+							/ (pano_count.at<int>(j, i) + 1.0);
+					pano_count.at<int>(j, i)++;
 				}
-				if (mask.at<unsigned char> (j, i) == 0) {
-					dst.at<Vec3b> (j, i) = src.at<Vec3b> (j, i);
-					if (roi.at<unsigned char> (j, i) == 255)
-						mask.at<unsigned char> (j, i) = roi.at<unsigned char> (
-								j, i);
+				if (mask.at<unsigned char>(j, i) == 0)
+					if (roi.at<unsigned char>(j, i) == 255){
+						// 書き込みたい画素位置にまだ書き込まれていない場合
+						mask.at<unsigned char>(j, i) = roi.at<unsigned char>(j,	i);
+						pano_count.at<int>(j, i)++;
+						dst.at<Vec3b>(j, i) = src.at<Vec3b>(j, i);
+					}
+				if (roi.at<unsigned char>(j, i) == 255){
+					// 書き込みたい各画素において，書き込んだ画素を記録
+
+					b = src.at<Vec3b>(j, i);
+					size_t tmp_size = color_map[j * PANO_W + i].size();
+					if(tmp_size==0)
+						color_map[j * PANO_W + i].push_back(Vec4i(b[0],b[1],b[2],1));
+					else{
+						size_t l ;
+						for (l = 0; l < tmp_size; l++) {
+							if ((int)(b[0]) == color_map[j * PANO_W + i][l][0] &&
+									(int)(b[1]) == color_map[j * PANO_W + i][l][1]&&
+									(int)(b[2]) == color_map[j * PANO_W + i][l][2] ) {
+								// 同じ画素値だったらカウントアップ
+								color_map[j * PANO_W + i][l][3]++;
+							}
+						}
+						if(l == tmp_size)
+							color_map[j * PANO_W + i].push_back(Vec4i(b[0],b[1],b[2],1));
+					}
 				}
-				pano_count.at<float> (j, i)++;
 			}
 		}
-
 	}
+
 }
 
-/* より良い対応点を選択する
- *
- * @Param descriptors1 特徴量１
- * @Param descriptors2 特徴量２
- * @Param key1         特徴点１
- * @Param key2         特徴点２
- * @Param matches      良いマッチングの格納先
- * @Param pt1          良いマッチングの特徴点座標１
- * @Param pt2          良いマッチングの特徴点座標２
- */
+	/* より良い対応点を選択する
+	 *
+	 * @Param descriptors1 特徴量１
+	 * @Param descriptors2 特徴量２
+	 * @Param key1         特徴点１
+	 * @Param key2         特徴点２
+	 * @Param matches      良いマッチングの格納先
+	 * @Param pt1          良いマッチングの特徴点座標１
+	 * @Param pt2          良いマッチングの特徴点座標２
+	 */
 void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
-		vector<KeyPoint> *key2, std::vector<cv::DMatch> *matches, vector<
-				Point2d> *pt1, vector<Point2d> *pt2) {
+		vector<KeyPoint> *key2, std::vector<cv::DMatch> *matches,
+		vector<Point2f> *pt1, vector<Point2f> *pt2) {
 
 	FlannBasedMatcher matcher;
 	//BFMatcher matcher(cv::NORM_L2, true);
 	vector<std::vector<cv::DMatch> > matches12, matches21;
+	vector<std::vector<cv::DMatch> > refine_matches12, refine_matches21;
 	std::vector<cv::DMatch> tmp_matches;
-	int knn = 1;
+	const int knn = 1;
 	//BFMatcher matcher(cv::NORM_HAMMING, true);
 	//matcher.match(descriptors1, descriptors2, tmp_matches);
 
 	cout << key1->size() << endl;
 	cout << key2->size() << endl;
-	cout << descriptors1.size() << endl;
-	cout << descriptors2.size() << endl;
+	//cout << descriptors1.size() << endl;
+	//cout << descriptors2.size() << endl;
 
 	matcher.knnMatch(descriptors1, descriptors2, matches12, knn);
 	matcher.knnMatch(descriptors2, descriptors1, matches21, knn);
+
+	cout << matches12[0].size() << endl;
+	cout << "start  refine_matches" << endl;
+	vector<DMatch> tmp;
+
+	 cout << "finished  refine_matches" << endl;
+
 	tmp_matches.clear();
+
 	// KNN探索で，1->2と2->1が一致するものだけがマッチしたとみなされる
 	for (size_t m = 0; m < matches12.size(); m++) {
 		bool findCrossCheck = false;
@@ -397,10 +434,10 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 	pt1->clear();
 	pt2->clear();
 	for (int i = 0; i < (int) tmp_matches.size(); i++) {
-		if (round((*key1)[tmp_matches[i].queryIdx].class_id) == round(
-				(*key2)[tmp_matches[i].trainIdx].class_id)) {
-			if (tmp_matches[i].distance > 0 && tmp_matches[i].distance
-					< (min_dist + 0.1) * 10) {
+		if (round((*key1)[tmp_matches[i].queryIdx].class_id)
+				== round((*key2)[tmp_matches[i].trainIdx].class_id)) {
+			if (tmp_matches[i].distance > 0
+					&& tmp_matches[i].distance < (min_dist + 0.1) * 10) {
 				//		  &&	(fabs(objectKeypoints[matches[i].queryIdx].pt.y - imageKeypoints[matches[i].trainIdx].pt.y)
 				//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
 				//				cout << "i : " << i << endl;
@@ -415,4 +452,93 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 		}
 	}
 
+}
+
+void get_refine_panorama(Mat out, Mat mask) {
+
+	// 出力用のMatを確保
+	//out = Mat(Size(PANO_W, PANO_H), CV_8UC3, Scalar::all(0)).clone();
+	//vector<vector<Vec3b> > panorama_color(PANO_H * PANO_W, vector<Vec3b>(1));
+	vector<Vec4i> pixel_color;
+	vector<Vec4i> tmp_pixel_color; 			//一時的な票の格納先
+	// パノラマの各画素に描画された色のリストからその画素を，最瀕値で置き換える
+	// 最瀕地は，投票された画素値の平均
+	int max_count = 0;
+	int num = 0;
+	// パノラマ画像の各画素は，複数枚の画像が重なっているため画素値の候補が複数ある
+	// そこで，候補をクラスタリングして最も投票数が多かった画素値をパノラマ画像の画素値とする
+	for (int i = 0; i < PANO_W; i++) {
+		for (int j = 0; j < PANO_H; j++) {
+			if (mask.at<unsigned char>(j, i) == 255){
+				max_count=0;
+				for (int l = 0; l < color_map[PANO_W * j + i].size(); l++) {
+
+					Vec3b c;
+					c[0] = (uchar)color_map[PANO_W * j + i][l][0];	// 基準の画素
+					c[1] = (uchar)color_map[PANO_W * j + i][l][1];	// 基準の画素
+					c[2] = (uchar)color_map[PANO_W * j + i][l][2];	// 基準の画素
+
+
+					num = 0;
+					tmp_pixel_color.clear();
+
+					for (int m = 0; m < color_map[PANO_W * j + i].size(); m++) {
+						// l番目を基準とし，投票する
+						// 類似度は内積により判断
+						// 一定以上の類似度ならその色を票として格納し
+						// 票数に１を加算
+
+						Vec3f tt;
+						Vec3b t;
+
+						tt[0] = pow(abs(color_map[PANO_W * j + i][m][0] - c[0]),2);
+						tt[1] = pow(abs(color_map[PANO_W * j + i][m][1] - c[1]),2);
+						tt[2] = pow(abs(color_map[PANO_W * j + i][m][2] - c[2]),2);
+
+						t[0] = color_map[PANO_W * j + i][m][0];
+						t[1] = color_map[PANO_W * j + i][m][1];
+						t[2] = color_map[PANO_W * j + i][m][2];
+						float d = tt[0] + tt[1] + tt[2];
+
+						if (sqrt(d) < 30) {
+							tmp_pixel_color.push_back(Vec4i(t[0],t[1],t[2],color_map[PANO_W * j + i][m][3]));
+
+							num++;
+						}
+
+					}
+					// この段階でlを基準とした投票が終わっており，
+					// 票の内容はtmp_pixel_colorに
+					// 票数はnumに格納されている
+					if (num > max_count) {
+						// l番目を基準として投票した結果，投票数が過去最大になった時のみ，票の色一覧を更新する
+						max_count = num;
+						pixel_color = tmp_pixel_color;
+
+					}
+				}
+				// ここでパノラマの１画素の画素値を決定する
+				// 最大投票数が得られた　ある画素を基準とする票群が
+				// pixel_colorに格納されている
+				// これらの平均をパノラマの画素値とする
+				if(color_map[PANO_W * j + i].size()==0){
+					// １度も画素値が書き込まれていない画素は飛ばす
+					continue;
+				}
+				int sum_r = 0, sum_g = 0, sum_b = 0;
+				int pixel_num =0;
+				for (int l = 0; l < pixel_color.size(); l++) {
+					sum_r += pixel_color[l][0]*pixel_color[l][3];
+					sum_g += pixel_color[l][1]*pixel_color[l][3];
+					sum_b += pixel_color[l][2]*pixel_color[l][3];
+					pixel_num+=pixel_color[l][3];
+				}
+
+				out.at<Vec3b>(j, i) = Vec3b((uchar)((float)sum_r / (float)pixel_num),
+						(uchar)((float)sum_g / (float)pixel_num),(uchar)((float)sum_b / (float)pixel_num));
+				 sum_r = 0, sum_g = 0, sum_b = 0,pixel_num =0;
+			}
+
+		}
+	}
 }

@@ -1,20 +1,18 @@
-#include <cv.h>
-#include <highgui.h>
+#include<opencv.hpp>
+#include<opencv2/gpu/gpu.hpp>
+#include <nonfree/features2d.hpp>
+#include <nonfree/gpu.hpp>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
-#include<opencv2/nonfree/nonfree.hpp>
-#include<opencv2/nonfree/features2d.hpp>
 #include <sstream>
 #include <string>
 #include <iostream>
+#include<iomanip>
 #include <vector>
 #include <fstream>
 #include <boost/program_options.hpp>
-#include <opencv2/calib3d/calib3d.hpp>
-#include <opencv2/features2d/features2d.hpp>
-#include <opencv2/stitching/stitcher.hpp>
 #include"3dms-func.h"
 
 // パノラマ画像の解像度
@@ -37,6 +35,7 @@ int main(int argc, char** argv) {
 
 	VideoWriter VideoWriter; // パノラマ動画
 	VideoCapture cap; // ビデオファイル
+	gpu::SURF_GPU d_surf;
 
 
 	// 動画から取得した各種画像の格納先
@@ -113,7 +112,7 @@ int main(int argc, char** argv) {
 
 	// 各種アルゴリズムによる特徴点検出および特徴量記述
 	string algorithm_type;
-	Ptr<Feature2D> feature;
+	Ptr<Feature2D> feature;// 汎用特徴点抽出および特徴量記述クラスへのポインタ
 	int hessian;
 
 
@@ -124,14 +123,14 @@ int main(int argc, char** argv) {
 	// 特徴点の集合と特徴量
 	std::vector<KeyPoint> objectKeypoints, imageKeypoints;
 	Mat objectDescriptors, imageDescriptors;
-	vector<Point2d> pt1, pt2; // 画像対における特徴点座の集合
+	vector<Point2f> pt1, pt2; // 画像対における特徴点座の集合
 
 	// より良いペアの格納先
 	std::vector<cv::DMatch> good_matches;
 	std::vector<KeyPoint> good_objectKeypoints, good_imageKeypoints;
 	Mat good_objectDescriptors, good_imageDescriptors;
 
-	Mat homography = Mat(3, 3, CV_64FC1); // 画像対におけるホモグラフィ
+	Mat homography ; // 画像対におけるホモグラフィ
 	Mat h_base = cv::Mat::eye(3, 3, CV_64FC1); // パノラマ平面へのホモグラフィ
 	int n, w, h;
 
@@ -205,7 +204,7 @@ int main(int argc, char** argv) {
 				"書きだす動画ファイル名の指定")("yaw", value<double> ()->default_value(0),
 				"初期フレーム投影時のyaw")("fps,f", value<int> ()->default_value(30),
 				"書きだす動画のフレームレートの指定")("algo,a", value<string> ()->default_value(
-				"SURF"), "特徴点抽出等のアルゴリズムの指定")("hessian",
+				"SIFT"), "特徴点抽出等のアルゴリズムの指定")("hessian",
 				value<int> ()->default_value(20), "SURFのhessianの値")("senser",
 				value<float> ()->default_value(0.0), "センサー情報を使う際の視線方向のしきい値")(
 				"line", value<bool> ()->default_value(false), "直線検出の利用")(
@@ -294,8 +293,12 @@ int main(int argc, char** argv) {
 	if (f_undist) {
 		read(node_inparam["distortion"], dist);
 	}
-	//Mat inv_a1 = a_tmp.clone();
-	A1Matrix = a_tmp.inv();
+	Mat inv_a1 = a_tmp.inv();
+	A1Matrix = a_tmp.clone();
+
+	// 画像をリサイズするのに合わせて，内部パラメータの画像中心座標を半分にする
+	//A1Matrix.at<double>(0,2) /= 2.0;
+	//A1Matrix.at<double>(1,2) /= 2.0;
 
 	A2Matrix.at<double> (0, 0) = A1Matrix.at<double> (0, 0);
 	A2Matrix.at<double> (1, 1) = A1Matrix.at<double> (1, 1);
@@ -358,25 +361,26 @@ int main(int argc, char** argv) {
 	feature = Feature2D::create(algorithm_type);
 
 	// 指定されたアルゴリズムが存在しなければSURFを使用する
-	if (feature == NULL) {
-		cerr << algorithm_type << " algorithm was not found " << endl;
-		cout << "using SURF algorithm" << endl;
+	if (feature==NULL) {
+		cout<< algorithm_type << " algorithm was not found " << endl;
 		feature = Feature2D::create("SURF");
+		cout << "using SURF algorithm" << endl;
 	}
 
 	// SURFのときのみパラメータを設定（SURFしかやったことないんで...）
 	if (algorithm_type.compare("SURF") == 0) {
 		feature->set("extended", 1);
 		feature->set("hessianThreshold", hessian);
-		feature->set("nOctaveLayers", 4);
-		feature->set("nOctaves", 3);
+		feature->set("nOctaveLayers", 8);
+		feature->set("nOctaves", 6);
 		feature->set("upright", 0);
 	}else if(algorithm_type.compare("SIFT") == 0){
 		//feature->set("nfeatures", 0);
-		feature->set("nOctaveLayers", 10);
-		feature->set("contrastThreshold", 0.02);
-		feature->set("edgeThreshold", 20);
-		feature->set("sigma", 2.0);
+		//feature->set("nOctaveLayers", 10);
+		//feature->set("contrastThreshold", 0.02);
+		//feature->set("edgeThreshold", 20);
+		//feature->set("sigma", 2.0);
+
 	}
 
 	// 各種回転をパノラマ平面に適用
@@ -425,7 +429,7 @@ int main(int argc, char** argv) {
 	log << "<start_time>" << endl  << local->tm_year + 1900 << "/" << local->tm_mon + 1 << "/" <<  local->tm_mday
 			 <<	" " << local->tm_hour << ":" << local->tm_min << ":" << local->tm_sec << " "
 			 <<  local->tm_isdst << endl;;
-
+	;
 	/*end of logging*/
 
 	// センサ情報の領域確保
@@ -473,6 +477,7 @@ int main(int argc, char** argv) {
 
 		cap >> buf;
 		image = buf.clone();
+		//resize(image,image,Size(image.cols/2,image.rows/2)); // convert image to half image
 		frame_num++;
 		//undistort(buf, object, A1Matrix, dist);
 	}
@@ -504,9 +509,18 @@ int main(int argc, char** argv) {
 	transform_image2 = cv::Mat::zeros(Size(PANO_W, PANO_H), CV_8UC3);
 
 	// 初期フレームの特徴点の検出と特徴量の記述
-	feature->operator ()(gray_image, Mat(), imageKeypoints, imageDescriptors);
+	//PyramidAdaptedFeatureDetector g_feature_detector(new SiftFeatureDetector,5);
+	GridAdaptedFeatureDetector g_feature_detector(new SiftFeatureDetector,1000000,5,5);
+	g_feature_detector.detect(gray_image,imageKeypoints);
+	feature->operator ()(gray_image, Mat(), imageKeypoints, imageDescriptors,true);
 
-	warpPerspective(image, transform_image2, h_base, Size(PANO_W, PANO_H)); // 先頭フレームをパノラマ平面へ投影
+	 // 先頭フレームをパノラマ平面へ投影
+	warpPerspective(image, transform_image, h_base, Size(PANO_W, PANO_H));
+	warpPerspective(white_img, pano_black, h_base, Size(PANO_W, PANO_H));
+
+make_pano(transform_image,transform_image2,mask,pano_black);
+
+
 
 	// 合成に使ったホモグラフィ行列を記録
 	ss << "homo_" << frame_num;
@@ -521,7 +535,7 @@ int main(int argc, char** argv) {
 		ss << save_dir << n_video;
 		cout << ss.str() << endl;
 		VideoWriter.open(ss.str(), CV_FOURCC('D', 'I', 'V', 'X'), (int) fps,
-				cvSize(w, h), 1);
+				Size(w, h), 1);
 	}
 	// フレームを飛ばす
 	if (!f_center) {
@@ -533,7 +547,7 @@ int main(int argc, char** argv) {
 					<< endl;
 			pano_monographys.push_back(h_base.clone());
 			ss << save_dir << "pano_src_" << frame_num << ".jpg";
-			imwrite(ss.str(), object);
+			imwrite(ss.str(), image);
 			ss.str("");
 			ss.clear();
 		}
@@ -587,13 +601,16 @@ int main(int argc, char** argv) {
 			cout << cap.get(CV_CAP_PROP_FPS) << "[frame / sec]" << endl;
 			cap >> buf;
 
+			if (buf.empty())
+				break;
+
 			if (f_undist)
 				undistort(buf, object, A1Matrix, dist);
 			else
 				object = buf.clone();
 			frame_num++;
-			if (object.empty())
-				break;
+			//resize(object,object,Size(object.cols/2,object.rows/2));
+
 
 			printf("\nframe=%d\n", frame_num);
 			cvtColor(object, gray_image, CV_RGB2GRAY);
@@ -701,8 +718,9 @@ int main(int argc, char** argv) {
 			waitKey(30);
 
 			cvtColor(object, gray_image, CV_RGB2GRAY);
+			g_feature_detector.detect(gray_image,objectKeypoints);
 			feature->operator ()(gray_image, hough_dst, objectKeypoints,
-					objectDescriptors);
+					objectDescriptors,true);
 		} else {
 			//	cvtColor(object, gray_image, CV_RGB2GRAY);
 			//	feature->operator ()(gray_image, Mat(), objectKeypoints,
@@ -805,8 +823,9 @@ int main(int argc, char** argv) {
 		// ここで，近いフレームが見つかっている場合はそのフレームがimageに
 		// 見つかっていない場合は，FRAME_T + a 前のフレームがimageに格納されているはず
 		cvtColor(object, gray_image, CV_RGB2GRAY);
+		g_feature_detector.detect(gray_image,objectKeypoints);
 		feature->operator ()(gray_image, Mat(), objectKeypoints,
-				objectDescriptors);
+				objectDescriptors,true);
 
 		good_matcher(objectDescriptors, imageDescriptors, &objectKeypoints,
 				&imageKeypoints, &matches, &pt1, &pt2);
@@ -893,8 +912,10 @@ int main(int argc, char** argv) {
 		printf("n = %d\n", n);
 		printf("num_of_obj = %d\n", pt1.size());
 		printf("num_of_img = %d\n", pt2.size());
+		vector<uchar> state;
 		if (n >= 4) {
-			homography = findHomography(Mat(pt1), Mat(pt2), CV_RANSAC, 5.0);
+			homography = findHomography(Mat(pt1), Mat(pt2),state ,CV_RANSAC, 5.0);
+
 		} else {
 			setHomographyReset(&homography);
 			printf("frame_num = %d\n", frame_num);
@@ -949,7 +970,7 @@ int main(int argc, char** argv) {
 			roi.height = (double) transform_image.rows * f;
 			roi.y = ((double) h - (double) transform_image.rows * f) / 2.0;
 			Mat roi_movie(movie, roi);
-			resize(transform_image, roi_movie, cv::Size(0, 0), f, f);
+			//resize(transform_image, roi_movie, cv::Size(0, 0), f, f);
 
 			waitKey(30);
 			//tmp.copyTo(roi_movie);
@@ -988,6 +1009,15 @@ int main(int argc, char** argv) {
 	imwrite(ss.str(), mask);
 	ss.str("");
 	ss.clear();
+
+	Mat fine_pano(cv::Mat::zeros(Size(PANO_W, PANO_H), CV_8UC3));
+	get_refine_panorama(fine_pano,mask);
+
+	if(fine_pano.empty()){
+		cout << "fine pano is empty" <<endl;
+		exit(1);
+	}
+	imwrite("fine_panorama.jpg",fine_pano);
 
 	gettimeofday(&t1,NULL); // 開始時刻の取得
 	log << "<processing_start>" << "\n" << t0.tv_sec << "." << t0.tv_usec << "[sec]" << endl;
