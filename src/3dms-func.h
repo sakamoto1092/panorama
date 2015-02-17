@@ -13,7 +13,9 @@ typedef struct{
     //double HH,MM,SS;
     double TT;
 }SENSOR_DATA;
-
+// CROSS     : クロスマッチング（1->2 & 2->1）
+// KNN2_DIST : KNNでの2点で距離が離れているものを採用
+enum{CROSS, KNN2_DIST};
 // ���ĤΥ��󥵥ǡ�����ɽ�������ߤϻ���Ȧ�, ��, ��, ��-north ��ɽ��
 int DispSensorData(SENSOR_DATA sd);
 
@@ -86,7 +88,19 @@ void make_pano(Mat src, Mat dst, Mat mask, Mat roi);
  * @Param pt1          良いマッチングの特徴点座標1の格納先
  * @Param pt2          良いマッチングの特徴点座標2の格納先
  */
-void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
-		vector<KeyPoint> *key2, std::vector<cv::DMatch> *matches, vector<
-				Point2f> *pt1, vector<Point2f> *pt2);
+void good_matcher(Mat descriptors1, Mat descriptors2, std::vector<KeyPoint> *key1,
+		std::vector<KeyPoint> *key2, std::vector<cv::DMatch> *matches, std::vector<
+				Point2f> *pt1, std::vector<Point2f> *pt2);
 void get_refine_panorama(Mat out,Mat mask);
+
+/* 特徴点のペアから回転行列と内部パラメータによる
+ * 射影変換行列を計算する関数
+ * 初期値としてA1とA2をとり，レーベンバーグマーカート法で
+ * 計算する．
+ * @Param A1       queryの内部パラメータ
+ * @Param A2       trainの内部パラメータ
+ * @Param features 特徴点と特徴量　size 2
+ * @Param outA1    推定されたA1
+ * @Param outA2    推定されたA2
+ */
+Mat rotation_estimater(Mat A1, Mat A2, vector<cv::detail::ImageFeatures> features, Mat outA1, Mat outA2);

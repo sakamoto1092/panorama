@@ -5,9 +5,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include<opencv.hpp>
-#include<opencv2/gpu/gpu.hpp>
+#include <opencv2/stitching/stitcher.hpp>
+#include <iostream>
+#include <vector>
+#include <fstream>
 #include "3dms-func.h"
-
+#include<assert.h>
 using namespace cv;
 using namespace std;
 //#define PANO_W 12000
@@ -15,9 +18,7 @@ using namespace std;
 #define PANO_H 3000
 cv::Mat pano_count = Mat(Size(PANO_W, PANO_H), CV_32S, Scalar::all(1));
 
-vector<vector<Vec4i> > color_map(PANO_H * PANO_W, vector<Vec4i>()); // パノラマの各画素にどんな色が出てきたかを格納する
-//vector<vector<int> > color_map_counter(PANO_H * PANO_W, vector<int>(1)); // パノラマの各画素の各色が何回出てきたかを数えるカウンタ
-//vector<vector<Vec3b> > color_map(PANO_H*PANO_W,vector<Vec4b>());
+//vector<vector<Vec4i> > color_map(PANO_H * PANO_W, vector<Vec4i>()); // パノラマの各画素にどんな色が出てきたかを格納する
 
 // ���ĤΥ��󥵥ǡ�����ɽ�������ߤϻ���Ȧ�, ��, ��, ��-north ��ɽ��
 int DispSensorData(SENSOR_DATA sd) {
@@ -130,7 +131,7 @@ int GetSensorDataForTime(double TT, // �������
 // Tilt :
 int SetTiltRotationMatrix(Mat *tiltMatrix, double tilt_deg) {
 	double tilt_angle;
-
+	(*tiltMatrix) = Mat::eye(3,3,CV_64FC1);
 	tilt_angle = tilt_deg / 180.0 * M_PI;
 	(*tiltMatrix).at<double>(1, 1) = cos(tilt_angle);
 	(*tiltMatrix).at<double>(1, 2) = -sin(tilt_angle);
@@ -147,7 +148,7 @@ int SetTiltRotationMatrix(Mat *tiltMatrix, double tilt_deg) {
 int SetPanRotationMatrix(Mat *panMatrix, double pan_deg) {
 	double pan_angle;
 	pan_angle = pan_deg / 180.0 * M_PI;
-
+	(*panMatrix) = Mat::eye(3,3,CV_64FC1);
 	(*panMatrix).at<double>(2, 2) = cos(pan_angle);
 	(*panMatrix).at<double>(2, 0) = -sin(pan_angle);
 	(*panMatrix).at<double>(0, 2) = sin(pan_angle);
@@ -162,7 +163,7 @@ int SetPanRotationMatrix(Mat *panMatrix, double pan_deg) {
 // Roll :
 int SetRollRotationMatrix(Mat *rollMatrix, double roll_deg) {
 	double roll_angle;
-
+	(*rollMatrix) = Mat::eye(3,3,CV_64FC1);
 	roll_angle = roll_deg / 180.0 * M_PI;
 	(*rollMatrix).at<double>(0, 0) = cos(roll_angle);
 	(*rollMatrix).at<double>(0, 1) = -sin(roll_angle);
@@ -178,7 +179,7 @@ int SetRollRotationMatrix(Mat *rollMatrix, double roll_deg) {
 // Pitch :
 int SetPitchRotationMatrix(Mat *pitchMatrix, double pitch_deg) {
 	double pitch_angle;
-
+	(*pitchMatrix) = Mat::eye(3,3,CV_64FC1);
 	pitch_angle = pitch_deg / 180.0 * M_PI;
 	(*pitchMatrix).at<double>(1, 1) = cos(pitch_angle);
 	(*pitchMatrix).at<double>(1, 2) = -sin(pitch_angle);
@@ -194,7 +195,7 @@ int SetPitchRotationMatrix(Mat *pitchMatrix, double pitch_deg) {
 // Yaw
 int SetYawRotationMatrix(Mat *yawMatrix, double yaw_deg) {
 	double yaw_angle;
-
+	(*yawMatrix)= Mat::eye(3,3,CV_64FC1);
 	yaw_angle = yaw_deg / 180.0 * M_PI;
 	(*yawMatrix).at<double>(2, 2) = cos(yaw_angle);
 	(*yawMatrix).at<double>(2, 0) = -sin(yaw_angle);
@@ -208,7 +209,8 @@ int SetYawRotationMatrix(Mat *yawMatrix, double yaw_deg) {
 }
 
 void setHomographyReset(Mat* homography) {
-	cvZero(homography);
+	//cvZero(homography);
+	*homography = Mat::zeros(homography->cols,homography->rows,homography->type());
 	(*homography).at<double>(0, 0) = 1;
 	(*homography).at<double>(1, 1) = 1;
 	(*homography).at<double>(2, 2) = 1;
@@ -220,6 +222,7 @@ void setHomographyReset(Mat* homography) {
 double compareSURFDescriptors(const float* d1, const float* d2, double best,
 		int length) {
 	double total_cost = 0;
+
 	assert(length % 4 == 0);
 	for (int i = 0; i < length; i += 4) {
 		double t0 = d1[i] - d2[i];
@@ -282,12 +285,9 @@ void get_histimage(Mat image, Mat *hist_image) {
 
 			for (int k = 0; k < 256; k++)
 				rectangle(hist_image[i * 10 + j],
-						Point(k * bin_w, hist_image[i * 10 + j].rows),
-						cvPoint((k + 1) * bin_w,
-								hist_image[i * 10 + j].rows
-										- cvRound(hist.at<float>(k))),
+						Point( k * bin_w      , hist_image[i * 10 + j].rows),
+						Point( (k + 1) * bin_w, hist_image[i * 10 + j].rows - round(hist.at<float>(k)) ),
 						cvScalarAll(0), -1, 8, 0);
-
 			// ヒストグラムを計算した部分の画像を切り出して
 			// ヒストグラム画像の横に連結
 			roi_rect.width = tmp_img.cols;
@@ -313,6 +313,7 @@ void get_histimage(Mat image, Mat *hist_image) {
 
 void make_pano(Mat src, Mat dst, Mat mask, Mat roi) {
 
+	static int cc = 1;
 	Vec3f a,b;
 	//サイズの一致を確認
 	if (src.cols == dst.cols && src.rows == dst.rows) {
@@ -335,6 +336,7 @@ void make_pano(Mat src, Mat dst, Mat mask, Mat roi) {
 						pano_count.at<int>(j, i)++;
 						dst.at<Vec3b>(j, i) = src.at<Vec3b>(j, i);
 					}
+/*
 				if (roi.at<unsigned char>(j, i) == 255){
 					// 書き込みたい各画素において，書き込んだ画素を記録
 
@@ -356,10 +358,16 @@ void make_pano(Mat src, Mat dst, Mat mask, Mat roi) {
 							color_map[j * PANO_W + i].push_back(Vec4i(b[0],b[1],b[2],1));
 					}
 				}
+*/
 			}
 		}
 	}
-
+	stringstream ss;
+	ss.str("");
+	ss.clear();
+ss <<  "pano_" << cc << ".jpg";
+	imwrite(ss.str(), dst);
+	cc++;
 }
 
 	/* より良い対応点を選択する
@@ -376,12 +384,15 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 		vector<KeyPoint> *key2, std::vector<cv::DMatch> *matches,
 		vector<Point2f> *pt1, vector<Point2f> *pt2) {
 
+	static float gain =1.0;
+
+	int MATCH_TYPE = KNN2_DIST;
+	float knn2_conf = 0.3f;
 	FlannBasedMatcher matcher;
 	//BFMatcher matcher(cv::NORM_L2, true);
 	vector<std::vector<cv::DMatch> > matches12, matches21;
-	vector<std::vector<cv::DMatch> > refine_matches12, refine_matches21;
 	std::vector<cv::DMatch> tmp_matches;
-	const int knn = 1;
+	int knn = 2;
 	//BFMatcher matcher(cv::NORM_HAMMING, true);
 	//matcher.match(descriptors1, descriptors2, tmp_matches);
 
@@ -392,68 +403,95 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 
 	matcher.knnMatch(descriptors1, descriptors2, matches12, knn);
 	matcher.knnMatch(descriptors2, descriptors1, matches21, knn);
-
-	cout << matches12[0].size() << endl;
-	cout << "start  refine_matches" << endl;
-	vector<DMatch> tmp;
-
-	 cout << "finished  refine_matches" << endl;
-
 	tmp_matches.clear();
-
-	// KNN探索で，1->2と2->1が一致するものだけがマッチしたとみなされる
-	for (size_t m = 0; m < matches12.size(); m++) {
-		bool findCrossCheck = false;
-		for (size_t fk = 0; fk < matches12[m].size(); fk++) {
-			cv::DMatch forward = matches12[m][fk];
-			for (size_t bk = 0; bk < matches21[forward.trainIdx].size(); bk++) {
-				cv::DMatch backward = matches21[forward.trainIdx][bk];
-				if (backward.trainIdx == forward.queryIdx) {
-					tmp_matches.push_back(forward);
-					findCrossCheck = true;
+	if (MATCH_TYPE == CROSS) {
+		// KNN探索で，1->2と2->1が一致するものだけがマッチしたとみなされる
+		for (size_t m = 0; m < matches12.size(); m++) {
+			bool findCrossCheck = false;
+			for (size_t fk = 0; fk < matches12[m].size(); fk++) {
+				cv::DMatch forward = matches12[m][fk];
+				for (size_t bk = 0; bk < matches21[forward.trainIdx].size();
+						bk++) {
+					cv::DMatch backward = matches21[forward.trainIdx][bk];
+					if (backward.trainIdx == forward.queryIdx) {
+						tmp_matches.push_back(forward);
+						findCrossCheck = true;
+						break;
+					}
+				}
+				if (findCrossCheck)
 					break;
+			}
+		}
+
+		cout << "matches : " << tmp_matches.size() << endl;
+		double min_dist = DBL_MAX;
+		for (int i = 0; i < (int) tmp_matches.size(); i++) {
+			double dist = tmp_matches[i].distance;
+			if (dist < min_dist)
+				min_dist = dist;
+		}
+
+		cout << "min dist :" << min_dist << endl;
+
+		//  対応点間の移動距離による良いマッチングの取捨選択
+		matches->clear();
+		pt1->clear();
+		pt2->clear();
+		for (int i = 0; i < (int) tmp_matches.size(); i++) {
+			if (round((*key1)[tmp_matches[i].queryIdx].class_id)
+					== round((*key2)[tmp_matches[i].trainIdx].class_id)) {
+				if (tmp_matches[i].distance > 0
+						&& tmp_matches[i].distance < (min_dist + 0.1) * 50) {
+					//		  &&	(fabs(objectKeypoints[matches[i].queryIdx].pt.y - imageKeypoints[matches[i].trainIdx].pt.y)
+					//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
+					//				cout << "i : " << i << endl;
+					matches->push_back(tmp_matches[i]);
+					pt1->push_back((*key1)[tmp_matches[i].queryIdx].pt);
+					pt2->push_back((*key2)[tmp_matches[i].trainIdx].pt);
+					//good_objectKeypoints.push_back(
+					//		objectKeypoints[tmp_matches[i].queryIdx]);
+					//good_imageKeypoints.push_back(
+					//		imageKeypoints[tmp_matches[i].trainIdx]);
 				}
 			}
-			if (findCrossCheck)
-				break;
 		}
-	}
+	} else if (MATCH_TYPE == KNN2_DIST) {
+		// opencvのdetailクラスのmatcherを参考にした
+		set<pair<int, int> > match_set;
+		matches->clear();
+		pt1->clear();
+		pt2->clear();
+		for (auto i : matches12) {
+			if (i.size() < 2)
+				continue;
 
-	cout << "matches : " << tmp_matches.size() << endl;
-	double min_dist = DBL_MAX;
-	for (int i = 0; i < (int) tmp_matches.size(); i++) {
-		double dist = tmp_matches[i].distance;
-		if (dist < min_dist)
-			min_dist = dist;
-	}
+			const DMatch& m1 = i[0];
+			const DMatch& m2 = i[1];
+			if (m1.distance < (1.f - knn2_conf) * m2.distance) {
+				matches->push_back(m1);
+				match_set.insert(make_pair(m1.queryIdx, m1.trainIdx));
+				pt1->push_back((*key1)[m1.queryIdx].pt);
+				pt2->push_back((*key2)[m1.trainIdx].pt);
+			}
+		}
+		for (auto i : matches21) {
+			if (i.size() < 2)
+				continue;
 
-	cout << "min dist :" << min_dist << endl;
-
-	//  対応点間の移動距離による良いマッチングの取捨選択
-	matches->clear();
-	pt1->clear();
-	pt2->clear();
-	for (int i = 0; i < (int) tmp_matches.size(); i++) {
-		if (round((*key1)[tmp_matches[i].queryIdx].class_id)
-				== round((*key2)[tmp_matches[i].trainIdx].class_id)) {
-			if (tmp_matches[i].distance > 0
-					&& tmp_matches[i].distance < (min_dist + 0.1) * 10) {
-				//		  &&	(fabs(objectKeypoints[matches[i].queryIdx].pt.y - imageKeypoints[matches[i].trainIdx].pt.y)
-				//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
-				//				cout << "i : " << i << endl;
-				matches->push_back(tmp_matches[i]);
-				pt1->push_back((*key1)[tmp_matches[i].queryIdx].pt);
-				pt2->push_back((*key2)[tmp_matches[i].trainIdx].pt);
-				//good_objectKeypoints.push_back(
-				//		objectKeypoints[tmp_matches[i].queryIdx]);
-				//good_imageKeypoints.push_back(
-				//		imageKeypoints[tmp_matches[i].trainIdx]);
+			const DMatch& m1 = i[0];
+			const DMatch& m2 = i[1];
+			if (m1.distance < (1.f - knn2_conf) * m2.distance) {
+				if (match_set.find(make_pair(m1.trainIdx, m1.queryIdx))	== match_set.end()) {
+					matches->push_back(DMatch(m1.trainIdx, m1.queryIdx, m1.distance));
+					pt1->push_back((*key1)[m1.trainIdx].pt);
+					pt2->push_back((*key2)[m1.queryIdx].pt);
+				}
 			}
 		}
 	}
-
 }
-
+/*
 void get_refine_panorama(Mat out, Mat mask) {
 
 	// 出力用のMatを確保
@@ -541,4 +579,79 @@ void get_refine_panorama(Mat out, Mat mask) {
 
 		}
 	}
+}
+
+*/
+Mat rotation_estimater(Mat A1, Mat A2, vector<detail::ImageFeatures> features,
+		Mat outA1, Mat outA2) {
+	Mat homography;
+
+	vector<detail::MatchesInfo> pairwise_matches;
+
+	// MatchesInfo を生成するためにopencvのmatcherを使用
+	detail::BestOf2NearestMatcher matcher(false, 0.3f);
+	matcher(features, pairwise_matches);
+	matcher.collectGarbage();
+
+	// detail::HomographyBasedEstimatorと
+	// detail::BundleAdjusterReprojを使った
+	// 回転行列の推定（求めることはできたが合っているかの検証はまだ）
+	detail::HomographyBasedEstimator estimator;
+	vector<detail::CameraParams> cameras;
+	estimator(features, pairwise_matches, cameras);
+
+	for (auto var = cameras.begin(); var < cameras.end(); var++) {
+		// BundleBundleAdjusterはCV_32Fを要求しているので変換
+		Mat R;
+		(*var).R.convertTo(R, CV_32F);
+		(*var).R = R.clone();
+		 cout << "before : " << (*var).R << endl;
+	}
+
+	Ptr<detail::BundleAdjusterBase> adjuster;
+	adjuster = new detail::BundleAdjusterReproj();
+	adjuster->setConfThresh(1.f);
+	//Mat_<uchar> refine_mask = Mat::zeros(3, 3, CV_8U);
+	//refine_mask(0, 0) = 1; //focal
+	//refine_mask(0, 1) = 1; // useless
+	//refine_mask(0, 2) = 1; // ppx
+	//refine_mask(1, 1) = 1; // aspect
+	//refine_mask(1, 2) = 1; // ppy
+	//adjuster->setRefinementMask(refine_mask);
+
+	cameras[0].focal = A1.at<double>(0, 0);
+	cameras[0].aspect = A1.at<double>(1, 1) / cameras[0].focal;
+	cameras[0].ppx = A1.at<double>(0, 2);
+	cameras[0].ppy = A1.at<double>(1, 2);
+	cout << cameras[0].K() << endl;
+
+	cameras[1].focal = A1.at<double>(0, 0);
+	cameras[1].aspect = A1.at<double>(1, 1) / cameras[1].focal;
+	cameras[1].ppx = A1.at<double>(0, 2);
+	cameras[1].ppy = A1.at<double>(1, 2);
+	cout << cameras[1].K() << endl;
+	(*adjuster)(features, pairwise_matches, cameras);
+
+	// これは不要のはず
+	for (auto var : cameras) {
+		Mat R;
+		var.R.convertTo(R, CV_64F);
+		var.R = R.clone();
+		cout << "after : " << var.R << endl;
+	}
+
+	{
+		Mat R, K, R0, K0;
+		cameras[1].R.convertTo(R, CV_64F);
+		cameras[0].R.convertTo(R0, CV_64F);
+		Mat(cameras[1].K()).convertTo(K, CV_64F);
+		Mat(cameras[0].K()).convertTo(K0, CV_64F);
+		homography = K0 * R0.inv() * R * K.inv();
+		outA1 = K.clone();
+		outA2 = K0.clone();
+		cout << cameras[0].K() << endl;
+		cout << cameras[1].K() << endl;
+	}
+
+	return homography;
 }
