@@ -387,13 +387,13 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 	static float gain =1.0;
 
 	int MATCH_TYPE = KNN2_DIST;
-	float knn2_conf = 0.3f;
-	FlannBasedMatcher matcher;
-	//BFMatcher matcher(cv::NORM_L2, true);
+	float knn2_conf = 0.1f;
+	//FlannBasedMatcher matcher;
+	//BFMatcher matcher(cv::NORM_L2,true);
 	vector<std::vector<cv::DMatch> > matches12, matches21;
 	std::vector<cv::DMatch> tmp_matches;
 	int knn = 2;
-	//BFMatcher matcher(cv::NORM_HAMMING, true);
+	BFMatcher matcher(cv::NORM_HAMMING);
 	//matcher.match(descriptors1, descriptors2, tmp_matches);
 
 	cout << key1->size() << endl;
@@ -403,6 +403,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 
 	matcher.knnMatch(descriptors1, descriptors2, matches12, knn);
 	matcher.knnMatch(descriptors2, descriptors1, matches21, knn);
+	cout << "test"<<endl;
 	tmp_matches.clear();
 	if (MATCH_TYPE == CROSS) {
 		// KNN探索で，1->2と2->1が一致するものだけがマッチしたとみなされる

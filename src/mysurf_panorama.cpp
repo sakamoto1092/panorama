@@ -1,6 +1,7 @@
 #include <opencv2/opencv.hpp>
-#include<opencv2/nonfree/nonfree.hpp>
+#include <opencv2/nonfree/nonfree.hpp>
 #include <opencv2/stitching/stitcher.hpp>
+#include <AKAZE.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,7 +20,7 @@
 #define PANO_W 6000
 #define PANO_H 3000
 #define F_SCALE
-
+#define F_AKAZE
 using namespace std;
 using namespace cv;
 
@@ -511,17 +512,18 @@ int main(int argc, char** argv) {
 
 	// 初期フレームの特徴点の検出と特徴量の記述
 	//PyramidAdaptedFeatureDetector g_feature_detector(new SiftFeatureDetector,5);
-	GridAdaptedFeatureDetector g_feature_detector(new SiftFeatureDetector,
-			1000000, 2, 2);
+	GridAdaptedFeatureDetector g_feature_detector(new SiftFeatureDetector,1000000, 2, 2);
 
 	// gridadaptedfeaturedetectorで特徴点の検出
 	//g_feature_detector.detect(gray_image, imageKeypoints);
 
 	// 検出した特徴点の特徴量を記述（sift or surf）　特徴点検出は行わない (trueの引数)
-	feature->operator ()(gray_image, Mat(), imageKeypoints, imageDescriptors,
-			false);
-
-	/*
+#ifdef F_AKAZE
+	AKAZEOptions options;
+	options.img_height = gray_image.rows;
+	options.img_width = gray_image.cols;
+	options.dthreshold = 0.0001;
+	AKAZE akaze(options);
 	 //AKAZEで検出と記述を行う
 	 {
 	 Mat img32;
@@ -530,7 +532,10 @@ int main(int argc, char** argv) {
 	 akaze.Feature_Detection(imageKeypoints);
 	 akaze.Compute_Descriptors(imageKeypoints,imageDescriptors);
 	 }
-	 */
+#else
+	 feature->operator ()(gray_image, Mat(), imageKeypoints, imageDescriptors,false);
+#endif
+
 	// 先頭フレームをパノラマ平面へ投影
 	warpPerspective(image, transform_image, h_base, Size(PANO_W, PANO_H));
 	warpPerspective(white_img, pano_black, h_base, Size(PANO_W, PANO_H));
@@ -864,18 +869,17 @@ int main(int argc, char** argv) {
 		// 見つかっていない場合は，FRAME_T + a 前のフレームがimageに格納されているはず
 		cvtColor(object, gray_image, CV_RGB2GRAY);
 		//g_feature_detector.detect(gray_image, objectKeypoints);
-		feature->operator ()(gray_image, Mat(), objectKeypoints,
-				objectDescriptors, false);
-
-		/*
+#ifdef F_AKAZE
 		 {
-		 Mat img32;
-		 gray_image.convertTo(img32,CV_32F,1.0/255.0);
-		 akaze.Create_Nonlinear_Scale_Space(img32);
-		 akaze.Feature_Detection(objectKeypoints);
-		 akaze.Compute_Descriptors(objectKeypoints,objectDescriptors);
+			 Mat img32;
+			 gray_image.convertTo(img32,CV_32F,1.0/255.0);
+			 akaze.Create_Nonlinear_Scale_Space(img32);
+			 akaze.Feature_Detection(objectKeypoints);
+			 akaze.Compute_Descriptors(objectKeypoints,objectDescriptors);
 		 }
-		 */
+#else
+		 feature->operator ()(gray_image, Mat(), objectKeypoints,objectDescriptors, false);
+#endif
 		good_matcher(objectDescriptors, imageDescriptors, &objectKeypoints,
 				&imageKeypoints, &matches, &pt1, &pt2);
 
@@ -988,19 +992,16 @@ int main(int argc, char** argv) {
 
 		Mat estA1 = A1Matrix.clone();
 		Mat estA2 = A2Matrix.clone();
-		homography = rotation_estimater(A1Matrix, A2Matrix, features, estA1,
-				estA2);
+		homography = rotation_estimater(A1Matrix, A2Matrix, features, estA1,estA2);
 
 		if (near_homography.empty()) {
 			cout << "near_homography is empty." << endl;
 			cout << "num_sd : " << pano_sds.size() << endl;
-			;
 			cout << "num_pano : " << vec_n_pano_frames.size() << endl;
-			;
 			cout << "num_homo :" << pano_monographys.size() << endl;
-			;
 			return -1;
 		}
+
 		vector<DMatch> current_adopt;
 		for (int i = 0; i < matches.size(); i++)
 			if (state[i] == 1)
