@@ -20,7 +20,7 @@
 #define PANO_W 6000
 #define PANO_H 3000
 #define F_SCALE
-#define F_AKAZE
+//#define F_AKAZE
 using namespace std;
 using namespace cv;
 
@@ -36,6 +36,7 @@ int main(int argc, char** argv) {
 
 	VideoWriter VideoWriter; // パノラマ動画
 	VideoCapture cap; // ビデオファイル
+
 
 	// 動画から取得した各種画像の格納先
 	Mat buf;
@@ -570,8 +571,7 @@ int main(int argc, char** argv) {
 		ss.clear();
 		ss << save_dir << n_video;
 		cout << ss.str() << endl;
-		VideoWriter.open(ss.str(), CV_FOURCC('D', 'I', 'V', 'X'), (int) fps,
-				Size(w, h), 1);
+		VideoWriter.open(ss.str(), CV_FOURCC('D', 'I', 'V', 'X'), (int) fps,Size(w, h), 1);
 	}
 	// フレームを飛ばす
 	if (!f_center) {
@@ -880,19 +880,9 @@ int main(int argc, char** argv) {
 #else
 		 feature->operator ()(gray_image, Mat(), objectKeypoints,objectDescriptors, false);
 #endif
-		good_matcher(objectDescriptors, imageDescriptors, &objectKeypoints,
-				&imageKeypoints, &matches, &pt1, &pt2);
+		//good_matcher(objectDescriptors, imageDescriptors, &objectKeypoints,&imageKeypoints, &matches, &pt1, &pt2);
 
-		cout << "selected good_matches : " << pt1.size() << endl;
-		// マッチング結果をリサイズして表示
-		Mat result, r_result;
-		drawMatches(object, objectKeypoints, image, imageKeypoints, matches,
-				result);
-
-		namedWindow("matches", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
-
-		imshow("matches", result);
-		waitKey(30);
+		//cout << "selected good_matches : " << pt1.size() << endl;
 
 		/*
 		 // 補完作業
@@ -962,18 +952,17 @@ int main(int argc, char** argv) {
 		 object = buf.clone();
 		 }
 		 */
-		n = pt1.size();
-		printf("n = %d\n", n);
-		printf("num_of_obj = %d\n", pt1.size());
-		printf("num_of_img = %d\n", pt2.size());
-		vector<uchar> state;
-		if (n >= 4) {
-			homography = findHomography(Mat(pt1), Mat(pt2), state, RANSAC, 5.0);
-
-		} else {
-			setHomographyReset(&homography);
-			printf("frame_num = %d\n", frame_num);
-		}
+	//	n = pt1.size();
+		//printf("n = %d\n", n);
+	//	printf("num_of_obj = %d\n", pt1.size());
+	//	printf("num_of_img = %d\n", pt2.size());
+//		vector<uchar> state;
+//		if (n >= 4) {
+//			homography = findHomography(Mat(pt1), Mat(pt2), state, RANSAC, 5.0);
+		//} else {
+//			setHomographyReset(&homography);
+//			printf("frame_num = %d\n", frame_num);
+//		}
 
 		vector<detail::ImageFeatures> features;
 		features.clear();
@@ -992,7 +981,17 @@ int main(int argc, char** argv) {
 
 		Mat estA1 = A1Matrix.clone();
 		Mat estA2 = A2Matrix.clone();
-		homography = rotation_estimater(A1Matrix, A2Matrix, features, estA1,estA2);
+		vector<DMatch> current_adopt;
+		homography = rotation_estimater(A1Matrix, A1Matrix, features, estA1,estA2,current_adopt);
+
+		// マッチング結果をリサイズして表示
+		Mat result, r_result;
+		drawMatches(object, objectKeypoints, image, imageKeypoints, current_adopt,result);
+
+		namedWindow("matches", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
+
+		imshow("matches", result);
+		waitKey(30);
 
 		if (near_homography.empty()) {
 			cout << "near_homography is empty." << endl;
@@ -1002,13 +1001,10 @@ int main(int argc, char** argv) {
 			return -1;
 		}
 
-		vector<DMatch> current_adopt;
-		for (int i = 0; i < matches.size(); i++)
-			if (state[i] == 1)
-				current_adopt.push_back(matches[i]);
-		drawMatches(object, objectKeypoints, image, imageKeypoints,
-				current_adopt, result, Scalar::all(-1), Scalar::all(-1),
-				vector<char>(), 2);
+//		for (int i = 0; i < matches.size(); i++)
+//			if (state[i] == 1)
+//				current_adopt.push_back(matches[i]);
+		drawMatches(object, objectKeypoints, image, imageKeypoints,	current_adopt, result, Scalar::all(-1), Scalar::all(-1),vector<char>(), 2);
 		ss.clear();
 		ss.str("");
 		ss << "adopt_matches_" << frame_num << ".jpg";

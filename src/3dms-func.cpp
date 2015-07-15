@@ -321,14 +321,14 @@ void make_pano(Mat src, Mat dst, Mat mask, Mat roi) {
 		int w = src.cols;
 		for (int i = 0; i < w; i++) {
 			for (int j = 0; j < h; j++) {
-				if (mask.at<unsigned char>(j, i) == 255&& roi.at<unsigned char>(j, i) == 255) {
+				/*if (mask.at<unsigned char>(j, i) == 255&& roi.at<unsigned char>(j, i) == 255) {
 					// 書き込みたい画素位置にすでに画素が書き込まれていた場合
 					a = dst.at<Vec3b>(j, i);
 					b = src.at<Vec3b>(j, i);
 					dst.at<Vec3b>(j, i) = (a * pano_count.at<int>(j, i) + b)
 							/ (pano_count.at<int>(j, i) + 1.0);
 					pano_count.at<int>(j, i)++;
-				}
+				}*/
 				if (mask.at<unsigned char>(j, i) == 0)
 					if (roi.at<unsigned char>(j, i) == 255){
 						// 書き込みたい画素位置にまだ書き込まれていない場合
@@ -584,13 +584,13 @@ void get_refine_panorama(Mat out, Mat mask) {
 
 */
 Mat rotation_estimater(Mat A1, Mat A2, vector<detail::ImageFeatures> features,
-		Mat outA1, Mat outA2) {
+		Mat &outA1, Mat &outA2, vector<DMatch>& adopted) {
 	Mat homography;
 
 	vector<detail::MatchesInfo> pairwise_matches;
 
 	// MatchesInfo を生成するためにopencvのmatcherを使用
-	detail::BestOf2NearestMatcher matcher(false, 0.3f);
+	detail::BestOf2NearestMatcher matcher(true, 0.3f);
 	matcher(features, pairwise_matches);
 	matcher.collectGarbage();
 
@@ -606,31 +606,31 @@ Mat rotation_estimater(Mat A1, Mat A2, vector<detail::ImageFeatures> features,
 		Mat R;
 		(*var).R.convertTo(R, CV_32F);
 		(*var).R = R.clone();
-		 cout << "before : " << (*var).R << endl;
+		//cout << "test : " << (*var).R << endl;
 	}
 
 	Ptr<detail::BundleAdjusterBase> adjuster;
 	adjuster = new detail::BundleAdjusterReproj();
-	adjuster->setConfThresh(1.f);
-	//Mat_<uchar> refine_mask = Mat::zeros(3, 3, CV_8U);
-	//refine_mask(0, 0) = 1; //focal
-	//refine_mask(0, 1) = 1; // useless
-	//refine_mask(0, 2) = 1; // ppx
-	//refine_mask(1, 1) = 1; // aspect
-	//refine_mask(1, 2) = 1; // ppy
-	//adjuster->setRefinementMask(refine_mask);
+	adjuster->setConfThresh(1.0f);
+	Mat_<uchar> refine_mask = Mat::zeros(3, 3, CV_8U);
+	refine_mask(0, 0) = 1; //focal
+	refine_mask(0, 1) = 0; // useless
+	refine_mask(0, 2) = 0; // ppx
+	refine_mask(1, 1) = 0; // aspect
+	refine_mask(1, 2) = 0; // ppy
+	adjuster->setRefinementMask(refine_mask);
 
 	cameras[0].focal = A1.at<double>(0, 0);
 	cameras[0].aspect = A1.at<double>(1, 1) / cameras[0].focal;
 	cameras[0].ppx = A1.at<double>(0, 2);
 	cameras[0].ppy = A1.at<double>(1, 2);
-	cout << cameras[0].K() << endl;
+	//cout << cameras[0].K() << endl;
 
 	cameras[1].focal = A1.at<double>(0, 0);
 	cameras[1].aspect = A1.at<double>(1, 1) / cameras[1].focal;
 	cameras[1].ppx = A1.at<double>(0, 2);
 	cameras[1].ppy = A1.at<double>(1, 2);
-	cout << cameras[1].K() << endl;
+	//cout << cameras[1].K() << endl;
 	(*adjuster)(features, pairwise_matches, cameras);
 
 	// これは不要のはず
@@ -638,7 +638,8 @@ Mat rotation_estimater(Mat A1, Mat A2, vector<detail::ImageFeatures> features,
 		Mat R;
 		var.R.convertTo(R, CV_64F);
 		var.R = R.clone();
-		cout << "after : " << var.R << endl;
+
+		// cout << "test : " << var.R << endl;
 	}
 
 	{
@@ -650,8 +651,12 @@ Mat rotation_estimater(Mat A1, Mat A2, vector<detail::ImageFeatures> features,
 		homography = K0 * R0.inv() * R * K.inv();
 		outA1 = K.clone();
 		outA2 = K0.clone();
-		cout << cameras[0].K() << endl;
-		cout << cameras[1].K() << endl;
+		for(int i =0; i < pairwise_matches[2].inliers_mask.size();i++){
+			if(pairwise_matches[2].inliers_mask[i] == 1)
+				adopted.push_back(pairwise_matches[2].matches[i]);
+		}
+		//cout << cameras[0].K() << endl;
+		//cout << cameras[1].K() << endl;
 	}
 
 	return homography;
