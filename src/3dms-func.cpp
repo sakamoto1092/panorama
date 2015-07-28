@@ -4,14 +4,15 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include<opencv.hpp>
-#include <opencv2/stitching/stitcher.hpp>
+#include<opencv2/opencv.hpp>
+//#include <opencv2/stitching.hpp>
+#include<opencv2/stitching/stitcher.hpp>
 #include <iostream>
 #include <vector>
 #include <fstream>
 #include "3dms-func.h"
 #include<assert.h>
-using namespace cv;
+
 using namespace std;
 //#define PANO_W 12000
 #define PANO_W 6000
@@ -319,8 +320,10 @@ void make_pano(Mat src, Mat dst, Mat mask, Mat roi) {
 	if (src.cols == dst.cols && src.rows == dst.rows) {
 		int h = src.rows;
 		int w = src.cols;
-		for (int i = 0; i < w; i++) {
-			for (int j = 0; j < h; j++) {
+		int i, j;
+#pragma omp parallel for private(j)
+		for (i = 0; i < w; i++) {
+			for (j = 0; j < h; j++) {
 				/*if (mask.at<unsigned char>(j, i) == 255&& roi.at<unsigned char>(j, i) == 255) {
 					// 書き込みたい画素位置にすでに画素が書き込まれていた場合
 					a = dst.at<Vec3b>(j, i);
@@ -386,20 +389,20 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 
 	static float gain =1.0;
 
-	int MATCH_TYPE = KNN2_DIST;
+	int MATCH_TYPE = CROSS;
 	float knn2_conf = 0.1f;
-	//FlannBasedMatcher matcher;
+	FlannBasedMatcher matcher;
 	//BFMatcher matcher(cv::NORM_L2,true);
 	vector<std::vector<cv::DMatch> > matches12, matches21;
 	std::vector<cv::DMatch> tmp_matches;
 	int knn = 2;
-	BFMatcher matcher(cv::NORM_HAMMING);
+	//BFMatcher matcher(cv::NORM_HAMMING);
 	//matcher.match(descriptors1, descriptors2, tmp_matches);
 
 	cout << key1->size() << endl;
 	cout << key2->size() << endl;
-	//cout << descriptors1.size() << endl;
-	//cout << descriptors2.size() << endl;
+	cout << descriptors1.size() << endl;
+	cout << descriptors2.size() << endl;
 
 	matcher.knnMatch(descriptors1, descriptors2, matches12, knn);
 	matcher.knnMatch(descriptors2, descriptors1, matches21, knn);
@@ -443,7 +446,7 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 			if (round((*key1)[tmp_matches[i].queryIdx].class_id)
 					== round((*key2)[tmp_matches[i].trainIdx].class_id)) {
 				if (tmp_matches[i].distance > 0
-						&& tmp_matches[i].distance < (min_dist + 0.1) * 50) {
+						&& tmp_matches[i].distance < (min_dist + 0.1) * 20) {
 					//		  &&	(fabs(objectKeypoints[matches[i].queryIdx].pt.y - imageKeypoints[matches[i].trainIdx].pt.y)
 					//		/ fabs(objectKeypoints[matches[i].queryIdx].pt.x - 	imageKeypoints[matches[i].trainIdx].pt.x)) < 0.1) {
 					//				cout << "i : " << i << endl;
@@ -590,8 +593,11 @@ Mat rotation_estimater(Mat A1, Mat A2, vector<detail::ImageFeatures> features,
 	vector<detail::MatchesInfo> pairwise_matches;
 
 	// MatchesInfo を生成するためにopencvのmatcherを使用
-	detail::BestOf2NearestMatcher matcher(true, 0.3f);
-	matcher(features, pairwise_matches);
+	detail::BestOf2NearestMatcher matcher(false, 0.3f);
+
+	matcher.operator ()(features,pairwise_matches);
+	//matcher(features, pairwise_matches);
+
 	matcher.collectGarbage();
 
 	// detail::HomographyBasedEstimatorと
@@ -613,7 +619,7 @@ Mat rotation_estimater(Mat A1, Mat A2, vector<detail::ImageFeatures> features,
 	adjuster = new detail::BundleAdjusterReproj();
 	adjuster->setConfThresh(1.0f);
 	Mat_<uchar> refine_mask = Mat::zeros(3, 3, CV_8U);
-	refine_mask(0, 0) = 1; //focal
+	refine_mask(0, 0) = 0; //focal
 	refine_mask(0, 1) = 0; // useless
 	refine_mask(0, 2) = 0; // ppx
 	refine_mask(1, 1) = 0; // aspect

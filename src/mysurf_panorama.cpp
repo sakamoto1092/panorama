@@ -1,7 +1,8 @@
 #include <opencv2/opencv.hpp>
-#include <opencv2/nonfree/nonfree.hpp>
-#include <opencv2/stitching/stitcher.hpp>
-#include <AKAZE.h>
+//#include <opencv2/xfeatures2d.hpp>
+//#include <opencv2/stitching.hpp>
+#include<opencv2/nonfree/nonfree.hpp>
+#include<opencv2/stitching/stitcher.hpp>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -112,7 +113,8 @@ int main(int argc, char** argv) {
 
 	// 各種アルゴリズムによる特徴点検出および特徴量記述
 	string algorithm_type;
-	Ptr<Feature2D> feature; // 汎用特徴点抽出および特徴量記述クラスへのポインタ
+	//Ptr<Feature2D> feature; // 汎用特徴点抽出および特徴量記述クラスへのポインタ
+	SIFT feature ;//= SURF(hessian,3,4,1,0);
 	int hessian;
 
 	// 対応点の対の格納先
@@ -190,26 +192,24 @@ int main(int argc, char** argv) {
 	try {
 		// コマンドラインオプションの定義
 		options_description opt("Usage");
-		opt.add_options()("cam", value<std::string>(),
-				"動画名やセンサファイル名が記述されたファイルの指定")("center", value<std::string>(),
-				"センター画像の指定")("start,s", value<int>()->default_value(0),
-				"スタートフレームの指定")("end,e", value<int>()->default_value(INT_MAX),
-				"終了フレームの指定")("comp", value<bool>()->default_value(false),
-				"補完の設定")("inter,i", value<int>()->default_value(9), "取得フレームの間隔")(
-				"blur,b", value<int>()->default_value(0), "ブラーによるフレームの破棄の閾値")(
-				"video,v", value<std::string>(), "書きだす動画ファイル名の指定")("yaw",
-				value<double>()->default_value(0), "初期フレーム投影時のyaw")("fps,f",
-				value<int>()->default_value(30), "書きだす動画のフレームレートの指定")("algo,a",
-				value<string>()->default_value("SIFT"), "特徴点抽出等のアルゴリズムの指定")(
-				"hessian", value<int>()->default_value(20), "SURFのhessianの値")(
-				"senser", value<float>(), "センサー情報を使う際の視線方向のしきい値")("line",
-				value<bool>()->default_value(false), "直線検出の利用")("undist",
-				value<bool>()->default_value(false), "画像のレンズ歪み補正")("outdir,o",
-				value<string>()->default_value("./"), "各種ファイルの出力先ディレクトリの指定")
+		opt.add_options()("cam", value<std::string>(),"動画名やセンサファイル名が記述されたファイルの指定")
+				("center", value<std::string>(),"センター画像の指定")("start,s", value<int>()->default_value(0),"スタートフレームの指定")
+				("end,e", value<int>()->default_value(INT_MAX),"終了フレームの指定")
+				("comp", value<bool>()->default_value(false),"補完の設定")
+				("inter,i", value<int>()->default_value(9), "取得フレームの間隔")
+				("blur,b", value<int>()->default_value(0), "ブラーによるフレームの破棄の閾値")
+				("video,v", value<std::string>(), "書きだす動画ファイル名の指定")
+				("yaw",value<double>()->default_value(0), "初期フレーム投影時のyaw")
+				("fps,f",value<int>()->default_value(30), "書きだす動画のフレームレートの指定")
+				("algo,a",value<string>()->default_value("SIFT"), "特徴点抽出等のアルゴリズムの指定 <SIFT or SURF or AKAZE>")
+				("hessian", value<int>()->default_value(20), "SURFのhessianの値")
+				("sensor", value<float>(), "センサー情報を使う際の視線方向のしきい値")
+				("line",value<bool>()->default_value(false), "直線検出の利用")
+				("undist",value<bool>()->default_value(false), "画像のレンズ歪み補正")
+				("outdir,o",value<string>()->default_value("./"), "各種ファイルの出力先ディレクトリの指定")
 				("f_scale,f",value<float>()->default_value(1.0), "パノラマ平面の焦点距離に掛かる係数")
-				(
-				"in_param", value<string>(), "内部パラメータ(.xml)ファイル名の指定")("help,h",
-				"ヘルプの出力");
+				("in_param", value<string>(), "内部パラメータ(.xml)ファイル名の指定")
+				("help,h","ヘルプの出力");
 
 		// オプションのマップを作成
 		variables_map vm;
@@ -249,10 +249,10 @@ int main(int argc, char** argv) {
 			cout << "歪み補正をかけるには内部パラメータファイル名を指定して下さい．" << endl;
 			return -1;
 		}
-		if (vm.count("senser")) {
+		if (vm.count("sensor")) {
 			cout << "test " << endl;
 			f_senser = true; // センサ情報の使用/不使用
-			dist_direction = vm["senser"].as<float>();
+			dist_direction = vm["sensor"].as<float>();
 		} else {
 			f_senser = false; // センサ情報の使用/不使用
 			dist_direction = 0.0;
@@ -273,7 +273,6 @@ int main(int argc, char** argv) {
 		f_undist = vm["undist"].as<bool>(); // レンズ歪み補正
 		save_dir = vm["outdir"].as<string>();
 		f_line = vm["line"].as<bool>();
-
 	} catch (exception& e) {
 		cerr << "error: " << e.what() << "\n";
 		return -1;
@@ -281,6 +280,8 @@ int main(int argc, char** argv) {
 		cerr << "Exception of unknown type!\n";
 		return -1;
 	}
+
+
 
 	FileStorage cvfs_inparam(in_param, CV_STORAGE_READ);
 	if (!cvfs_inparam.isOpened()) {
@@ -299,9 +300,18 @@ int main(int argc, char** argv) {
 	// 画像をリサイズするのに合わせて，内部パラメータの画像中心座標を半分にする
 	//A1Matrix.at<double>(0,2) /= 2.0;
 	//A1Matrix.at<double>(1,2) /= 2.0;
+	//A1Matrix.at<double>(0, 0) = 900.313137990194;
+	//A1Matrix.at<double>(1, 1) = 914.256460337779;
+	//A1Matrix.at<double>(0, 2) = 634;
+	//A1Matrix.at<double>(1, 2) = 348;
+	//A2Matrix.at<double>(0, 0) = 900.313137990194;
+	//A2Matrix.at<double>(1, 1) = 914.256460337779;
+	//A2Matrix.at<double>(0, 2) = PANO_W / 2;
+	//A2Matrix.at<double>(1, 2) = PANO_H / 2;
 
-	A2Matrix.at<double>(0, 0) = A1Matrix.at<double>(0, 0)*focus_scale;
-	A2Matrix.at<double>(1, 1) = A1Matrix.at<double>(1, 1)*focus_scale;
+
+	A2Matrix.at<double>(0, 0) = A1Matrix.at<double>(0,0);
+	A2Matrix.at<double>(1, 1) = A1Matrix.at<double>(1,1);
 	A2Matrix.at<double>(0, 2) = PANO_W / 2;
 	A2Matrix.at<double>(1, 2) = PANO_H / 2;
 
@@ -343,7 +353,7 @@ int main(int argc, char** argv) {
 	if (FRAME_MAX < end)
 		end = FRAME_MAX;
 
-	std::cout << "Video Property : total flame = " << FRAME_MAX << endl;
+	std::cout << "Video Property : total frame = " << FRAME_MAX << endl;
 	cout << "out put video fps = " << fps << endl;
 
 	cout << "start frame : " << cap.get(CV_CAP_PROP_POS_FRAMES) << endl;
@@ -358,29 +368,33 @@ int main(int argc, char** argv) {
 	}
 
 	// 特徴点抽出記述器を生成
-	feature = Feature2D::create(algorithm_type);
-	// 指定されたアルゴリズムが存在しなければSURFを使用する
-	if (feature == NULL) {
-		cout << algorithm_type << " algorithm was not found " << endl;
-		feature = Feature2D::create("SURF");
-		cout << "using SURF algorithm" << endl;
-	}
-	// SURFのときのみパラメータを設定（SURFしかやったことないんで...）
 	if (algorithm_type.compare("SURF") == 0) {
-		feature->set("extended", 1);
-		feature->set("hessianThreshold", hessian);
-		feature->set("nOctaveLayers", 8);
-		feature->set("nOctaves", 6);
-		feature->set("upright", 0);
+		//feature = xfeatures2d::SIFT::create(hessian,3,4,1,0);
+		 //feature = SURF(hessian,3,4,1,0);
+
+		//feature->set("extended", 1);
+		//feature->set("hessianThreshold", hessian);
+		//feature->set("nOctaveLayers", 8);
+		//feature->set("nOctaves", 6);
+		//feature->set("upright", 0);
 	} else if (algorithm_type.compare("SIFT") == 0) {
+		//feature = xfeatures2d::SIFT::create(0,10,0.002,20,2.0);
+		feature = SIFT(0,10,0.02,20,2.0);
 		//feature->set("nfeatures", 0);
-		feature->set("nOctaveLayers", 10);
-		feature->set("contrastThreshold", 0.02);
-		feature->set("edgeThreshold", 20);
-		feature->set("sigma", 2.0);
-
+		//feature->set("nOctaveLayers", 10);
+		//feature->set("contrastThreshold", 0.02);
+		//feature->set("edgeThreshold", 20);
+		//feature->set("sigma", 2.0);
 	}
-
+	/*
+	else if(algorithm_type.compare("AKAZE") == 0){
+		feature = AKAZE::create(AKAZE::DESCRIPTOR_KAZE,0,3,0.0001f,4,4,1);
+	}else if(algorithm_type.compare("KAZE") == 0){
+		feature = KAZE::create(true,false,0.0001f);
+	}else{
+		cout << "can not create feature detector!" << endl;
+	}
+*/
 	// 各種回転をパノラマ平面に適用
 	SetRollRotationMatrix(&rollMatrix, (double) roll);
 	SetPitchRotationMatrix(&pitchMatrix, (double) pitch);
@@ -400,14 +414,13 @@ int main(int argc, char** argv) {
 	vector<String> v_log_str;
 	string log_str;
 
-	feature->getParams(v_log_str);
+	//feature->getParams(v_log_str);
 
 	log << "<avi_file_name>" << endl << imagefileName << endl;
 	log << "<A1>" << endl << A1Matrix << endl;
 	log << "<A2>" << endl << A2Matrix << endl;
 	log << "<roll pitch yaw>" << endl;
 	log << roll << " " << pitch << " " << yaw << endl;
-	log << "<FRAME_ T> " << endl << FRAME_T << endl;
 	log << "<Comp>" << endl;
 	log << f_comp << endl;
 	log << "<use center>" << endl;
@@ -421,6 +434,7 @@ int main(int argc, char** argv) {
 	log << "<end frame>" << endl << end << endl;
 	log << "<inter>" << endl << FRAME_T << endl;
 	log << "<Algorithm> " << endl << algorithm_type << endl;
+	/*
 	log << "<Algorithm Param>" << endl;
 	for (int ii = 0; ii < v_log_str.size(); ii++)
 		log << v_log_str[ii] << " " << feature->getDouble(v_log_str[ii])
@@ -429,7 +443,7 @@ int main(int argc, char** argv) {
 			<< local->tm_mon + 1 << "/" << local->tm_mday << " "
 			<< local->tm_hour << ":" << local->tm_min << ":" << local->tm_sec
 			<< " " << local->tm_isdst << endl;
-	;;
+	*/
 	/*end of logging*/
 
 	// センサ情報の領域確保
@@ -482,7 +496,6 @@ int main(int argc, char** argv) {
 
 		//resize(image,image,Size(image.cols/2,image.rows/2)); // convert image to half image
 		frame_num++;
-		//undistort(buf, object, A1Matrix, dist);
 	}
 
 	cout << cap.get(CV_CAP_PROP_FPS) << "[frame / sec]" << endl;
@@ -513,29 +526,15 @@ int main(int argc, char** argv) {
 
 	// 初期フレームの特徴点の検出と特徴量の記述
 	//PyramidAdaptedFeatureDetector g_feature_detector(new SiftFeatureDetector,5);
-	GridAdaptedFeatureDetector g_feature_detector(new SiftFeatureDetector,1000000, 2, 2);
+	//GridAdaptedFeatureDetector g_feature_detector(new SiftFeatureDetector,1000000, 2, 2);
 
 	// gridadaptedfeaturedetectorで特徴点の検出
 	//g_feature_detector.detect(gray_image, imageKeypoints);
 
-	// 検出した特徴点の特徴量を記述（sift or surf）　特徴点検出は行わない (trueの引数)
-#ifdef F_AKAZE
-	AKAZEOptions options;
-	options.img_height = gray_image.rows;
-	options.img_width = gray_image.cols;
-	options.dthreshold = 0.0001;
-	AKAZE akaze(options);
-	 //AKAZEで検出と記述を行う
-	 {
-	 Mat img32;
-	 gray_image.convertTo(img32,CV_32F,1.0/255.0);
-	 akaze.Create_Nonlinear_Scale_Space(img32);
-	 akaze.Feature_Detection(imageKeypoints);
-	 akaze.Compute_Descriptors(imageKeypoints,imageDescriptors);
-	 }
-#else
-	 feature->operator ()(gray_image, Mat(), imageKeypoints, imageDescriptors,false);
-#endif
+	// 検出した特徴点の特徴量を記述（sift or surf or akaze）　特徴点検出は行わない (trueの引数)
+	feature(gray_image, Mat(), imageKeypoints, imageDescriptors,false);
+	 //feature.detectAndCompute(gray_image, Mat(), imageKeypoints, imageDescriptors,false);
+
 
 	// 先頭フレームをパノラマ平面へ投影
 	warpPerspective(image, transform_image, h_base, Size(PANO_W, PANO_H));
@@ -608,9 +607,9 @@ int main(int argc, char** argv) {
 	double obj_frame_msec;
 
 	// 中間生成物等の確認用ウインドウの設定
-	namedWindow("Object Correspond", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO); // 合成途中のパノラマ画像
-	namedWindow("detected lines", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO); // 確率的ハフ変換で検出された直線からなるマスク画像
-	namedWindow("object image ", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO); // 取り出した動画フレーム
+	//namedWindow("Object Correspond", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO); // 合成途中のパノラマ画像
+	//namedWindow("detected lines", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO); // 確率的ハフ変換で検出された直線からなるマスク画像
+	//namedWindow("object image ", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO); // 取り出した動画フレーム
 
 	cv::Mat tmp(3, 3, CV_64FC1, Scalar(0));
 	Mat x;
@@ -640,15 +639,16 @@ int main(int argc, char** argv) {
 			if (buf.empty())
 				break;
 
-			if (f_undist)
+			if (f_undist){
 				undistort(buf, object, A1Matrix, dist);
-			else
+			}else{
 				object = buf.clone();
+			}
 			frame_num++;
 			//resize(object,object,Size(object.cols/2,object.rows/2));
 
 			printf("\nframe=%d\n", frame_num);
-			cvtColor(object, gray_image, CV_RGB2GRAY);
+			cvtColor(object, gray_image, CV_BGR2GRAY);
 			//cv::Laplacian(gray_image, tmp_img, CV_16S, 3);
 			//Canny(object, sobel_img, 50, 200);
 			cv::Sobel(gray_image, tmp_img, CV_32F, 1, 1);
@@ -724,16 +724,16 @@ int main(int argc, char** argv) {
 		}
 
 		//undistort(dist_src, object, A1Matrix.inv(), dist);
-		imshow("object image ", object);
-		waitKey(30);
+		//imshow("object image ", object);
+		//waitKey(30);
 
 		// 確率的ハフ変換で線を検出し，特徴点抽出のマスクに利用する
 		if (f_line) {
 			Mat hough_src, hough_dst; // ハフ変換の入力と，検出した線の出力先
-			cvtColor(object, gray_image, CV_RGB2GRAY);
+			cvtColor(object, gray_image, CV_BGR2GRAY);
 			Canny(gray_image, hough_src, 30, 50, 3);
 
-			imshow("detected lines", hough_src);
+			//imshow("detected lines", hough_src);
 			//			waitKey(0);
 
 			hough_dst = Mat(hough_src.size(), CV_8U, Scalar::all(0));
@@ -751,13 +751,13 @@ int main(int argc, char** argv) {
 			Mat t = hough_dst;
 			dilate(t, hough_dst, cv::Mat(), cv::Point(-1, -1), 5);
 
-			imshow("detected lines", hough_dst);
+			//imshow("detected lines", hough_dst);
 			waitKey(30);
 
-			cvtColor(object, gray_image, CV_RGB2GRAY);
-			g_feature_detector.detect(gray_image, objectKeypoints);
-			feature->operator ()(gray_image, hough_dst, objectKeypoints,
-					objectDescriptors, true);
+			cvtColor(object, gray_image, CV_BGR2GRAY);
+			//g_feature_detector.detect(gray_image, objectKeypoints);
+			//feature->detectAndCompute(gray_image, hough_dst, objectKeypoints,objectDescriptors, false);
+			feature(gray_image, hough_dst, objectKeypoints,objectDescriptors, false);
 		} else {
 			//	cvtColor(object, gray_image, CV_RGB2GRAY);
 			//	feature->operator ()(gray_image, Mat(), objectKeypoints,
@@ -788,8 +788,8 @@ int main(int argc, char** argv) {
 			SetPitchRotationMatrix(&pitchMatrix, obj_sd.beta);
 			SetRollRotationMatrix(&rollMatrix, obj_sd.gamma);
 			//warpPerspective(Point3d(1, 0, 0), vec1, yawMatrix * pitchMatrix* rollMatrix);
-			vec1 = yawMatrix * pitchMatrix * rollMatrix
-					* (cv::Mat_<double>(3, 1) << 1, 0, 0);
+			vec1 = rollMatrix
+					*yawMatrix * pitchMatrix *  (cv::Mat_<double>(3, 1) << 1, 0, 0);
 
 			for (int i = 0; i < pano_sds.size(); i++) {
 				SetYawRotationMatrix(&yawMatrix, pano_sds[i].alpha);
@@ -832,10 +832,11 @@ int main(int argc, char** argv) {
 				//cout << "detect near frame : " << near_sd.TT << " [sec]" << endl;
 				//cout << cap.get(CV_CAP_PROP_POS_FRAMES) << " [frame]" << endl;
 				cap >> buf;
-				if (f_undist)
+				if (f_undist){
 					undistort(buf, image, A1Matrix, dist);
-				else
+				}else{
 					image = buf.clone();
+				}
 				cap.set(CV_CAP_PROP_POS_FRAMES, tmp_frame_num); // フレーム位置を復元
 
 				if (image.empty()) {
@@ -844,11 +845,10 @@ int main(int argc, char** argv) {
 				}
 
 				// 近いフレームの特徴点抽出を再度実行
-				cvtColor(image, gray_image, CV_RGB2GRAY);
-				g_feature_detector.detect(gray_image, objectKeypoints);
-				feature->operator ()(gray_image, Mat(), imageKeypoints,
-						imageDescriptors, true);
-
+				cvtColor(image, gray_image, CV_BGR2GRAY);
+				//g_feature_detector.detect(gray_image, objectKeypoints);
+				//feature->detectAndCompute(gray_image, Mat(), imageKeypoints,imageDescriptors, false);
+				feature(gray_image, Mat(), imageKeypoints,imageDescriptors, false);
 				pano_sds.push_back(obj_sd);
 				vec_n_pano_frames.push_back(frame_num);
 			} else {
@@ -867,20 +867,16 @@ int main(int argc, char** argv) {
 
 		// ここで，近いフレームが見つかっている場合はそのフレームがimageに
 		// 見つかっていない場合は，FRAME_T + a 前のフレームがimageに格納されているはず
-		cvtColor(object, gray_image, CV_RGB2GRAY);
+		cvtColor(object, gray_image, CV_BGR2GRAY);
 		//g_feature_detector.detect(gray_image, objectKeypoints);
-#ifdef F_AKAZE
-		 {
-			 Mat img32;
-			 gray_image.convertTo(img32,CV_32F,1.0/255.0);
-			 akaze.Create_Nonlinear_Scale_Space(img32);
-			 akaze.Feature_Detection(objectKeypoints);
-			 akaze.Compute_Descriptors(objectKeypoints,objectDescriptors);
-		 }
-#else
-		 feature->operator ()(gray_image, Mat(), objectKeypoints,objectDescriptors, false);
-#endif
-		//good_matcher(objectDescriptors, imageDescriptors, &objectKeypoints,&imageKeypoints, &matches, &pt1, &pt2);
+		// feature->detectAndCompute(gray_image, Mat(), objectKeypoints,objectDescriptors, false);
+		 Mat feature_mask = Mat(gray_image.size(),CV_8UC1,Scalar(255));
+		 Rect rect(0,0,gray_image.cols,400);
+		 Mat white = Mat(feature_mask,rect);
+		 white = Scalar::all(0);
+
+		 feature(gray_image, feature_mask, objectKeypoints,objectDescriptors, false);
+		 //good_matcher(objectDescriptors, imageDescriptors, &objectKeypoints,&imageKeypoints, &matches, &pt1, &pt2);
 
 		//cout << "selected good_matches : " << pt1.size() << endl;
 
@@ -984,14 +980,17 @@ int main(int argc, char** argv) {
 		vector<DMatch> current_adopt;
 		homography = rotation_estimater(A1Matrix, A1Matrix, features, estA1,estA2,current_adopt);
 
+
+
+		//homography = findHomography(Mat(pt1),Mat(pt2),CV_RANSAC,5.0);
 		// マッチング結果をリサイズして表示
 		Mat result, r_result;
-		drawMatches(object, objectKeypoints, image, imageKeypoints, current_adopt,result);
+		//drawMatches(object, objectKeypoints, image, imageKeypoints, current_adopt,result);
 
-		namedWindow("matches", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
+		//namedWindow("matches", CV_WINDOW_NORMAL | CV_WINDOW_KEEPRATIO);
 
-		imshow("matches", result);
-		waitKey(30);
+		//imshow("matches", result);
+		//waitKey(30);
 
 		if (near_homography.empty()) {
 			cout << "near_homography is empty." << endl;
@@ -1017,7 +1016,7 @@ int main(int argc, char** argv) {
 
 		warpPerspective(white_img, pano_black, near_homography * homography,
 				Size(PANO_W, PANO_H), CV_INTER_LINEAR | CV_WARP_FILL_OUTLIERS);
-		imshow("detected lines", pano_black);
+		//imshow("detected lines", pano_black);
 		make_pano(transform_image, transform_image2, mask, pano_black);
 		//tmp = homography.clone();
 
@@ -1077,8 +1076,8 @@ int main(int argc, char** argv) {
 			VideoWriter.write(movie);
 		}
 
-		imshow("Object Correspond", transform_image2);
-		waitKey(30);
+		//imshow("Object Correspond", transform_image2);
+		//waitKey(30);
 		ss << save_dir << "transform4.jpg";
 		imwrite(ss.str(), transform_image2);
 		ss.str("");
@@ -1096,8 +1095,8 @@ int main(int argc, char** argv) {
 
 	// 最終的なパノラマ画像の表示と保存（後の処理に使うマスク画像も保存）
 
-	imshow("Object Correspond", transform_image2);
-	cout << "finished making the panorama" << endl;
+	//imshow("Object Correspond", transform_image2);
+	//cout << "finished making the panorama" << endl;
 	waitKey(30);
 
 	ss << save_dir << "transform4.jpg";
