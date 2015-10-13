@@ -5,8 +5,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include<opencv2/opencv.hpp>
-//#include <opencv2/stitching.hpp>
-#include<opencv2/stitching/stitcher.hpp>
+#include <opencv2/stitching.hpp>
+//#include<opencv2/stitching/stitcher.hpp>
 #include <iostream>
 #include <vector>
 #include <fstream>
@@ -288,7 +288,7 @@ void get_histimage(Mat image, Mat *hist_image) {
 				rectangle(hist_image[i * 10 + j],
 						Point( k * bin_w      , hist_image[i * 10 + j].rows),
 						Point( (k + 1) * bin_w, hist_image[i * 10 + j].rows - round(hist.at<float>(k)) ),
-						cvScalarAll(0), -1, 8, 0);
+						Scalar::all(0), -1, 8, 0);
 			// ヒストグラムを計算した部分の画像を切り出して
 			// ヒストグラム画像の横に連結
 			roi_rect.width = tmp_img.cols;
@@ -389,8 +389,8 @@ void good_matcher(Mat descriptors1, Mat descriptors2, vector<KeyPoint> *key1,
 
 	static float gain =1.0;
 
-	int MATCH_TYPE = CROSS;
-	float knn2_conf = 0.1f;
+	int MATCH_TYPE = KNN2_DIST;
+	float knn2_conf = 0.01f;
 	FlannBasedMatcher matcher;
 	//BFMatcher matcher(cv::NORM_L2,true);
 	vector<std::vector<cv::DMatch> > matches12, matches21;
@@ -584,8 +584,8 @@ void get_refine_panorama(Mat out, Mat mask) {
 		}
 	}
 }
-
 */
+
 Mat rotation_estimater(Mat A1, Mat A2, vector<detail::ImageFeatures> features,
 		Mat &outA1, Mat &outA2, vector<DMatch>& adopted) {
 	Mat homography;
@@ -667,3 +667,5 @@ Mat rotation_estimater(Mat A1, Mat A2, vector<detail::ImageFeatures> features,
 
 	return homography;
 }
+
+

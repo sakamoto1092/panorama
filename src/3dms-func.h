@@ -104,3 +104,53 @@ void get_refine_panorama(Mat out,Mat mask);
  * @Param outA2    推定されたA2
  */
 Mat rotation_estimater(Mat A1, Mat A2, std::vector<cv::detail::ImageFeatures> features, Mat &outA1, Mat &outA2 ,std::vector<DMatch>& adopted);
+
+
+/*!
+ * パスから拡張子を小文字にして取り出す
+ * @param[in] path ファイルパス
+ * @return (小文字化した)拡張子
+ */
+inline std::string GetExtension(const std::string &path) {
+    std::string ext;
+    size_t pos1 = path.rfind('.');
+    if(pos1 != std::string::npos){
+        ext = path.substr(pos1+1, path.size()-pos1);
+        std::string::iterator itr = ext.begin();
+        while(itr != ext.end()){
+            *itr = tolower(*itr);
+            itr++;
+        }
+        itr = ext.end()-1;
+        while(itr != ext.begin()){    // パスの最後に\0やスペースがあったときの対策
+            if(*itr == 0 || *itr == 32){
+                ext.erase(itr--);
+            }
+            else{
+                itr--;
+            }
+        }
+    }
+
+    return ext;
+}
+
+/*
+ * 文字列が画像あるいは動画の拡張子かどうかを判別
+ * @param[in] ext 拡張子
+ * @return 動画なら1,静止画なら2,その他なら0
+ */
+inline int checkMediaExtention(const std::string &ext){
+	int filetype = 0;
+
+	filetype = ext.compare("avi")  ? 1 :
+				ext.compare("mp4")  ? 1 :
+				ext.compare("3gp")  ? 1 :
+				ext.compare("jpg")  ? 2 :
+				ext.compare("jpeg") ? 2:
+				ext.compare("jpe")  ? 2 :
+				ext.compare("png")  ? 2 : 0;
+
+
+	return filetype;
+}

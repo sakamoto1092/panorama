@@ -1,8 +1,10 @@
 #include <opencv2/opencv.hpp>
-//#include <opencv2/xfeatures2d.hpp>
+//#include <opencv2/nonfree/features2d.hpp>
+#include <opencv2/xfeatures2d.hpp>
 //#include <opencv2/stitching.hpp>
-#include<opencv2/nonfree/nonfree.hpp>
-#include<opencv2/stitching/stitcher.hpp>
+//#include<opencv2/nonfree/nonfree.hpp>
+//#include<opencv2/stitching/stitcher.hpp>
+#include<opencv2/stitching.hpp>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,8 +24,10 @@
 #define PANO_H 3000
 #define F_SCALE
 //#define F_AKAZE
+
 using namespace std;
 using namespace cv;
+
 
 // コマンド引数を解析するためのライブラリ
 using boost::program_options::options_description;
@@ -68,7 +72,7 @@ int main(int argc, char** argv) {
 	// 各種フラグ
 	bool f_comp = false; // 線形補完
 	bool f_center = false; // センターサークル中心
-	bool f_video = false; // ビデオ書き出し
+	bool f_video = false; // ビデオ書き出し -> 入力ファイルの種類(video or images)
 	bool f_senser = false; // センサ情報の使用・不使用
 	bool f_line = false; // 直線検出を利用
 	bool f_undist = false; // レンズ歪み補正
@@ -79,6 +83,7 @@ int main(int argc, char** argv) {
 	string n_center; // センターサークル画像名
 	string in_param; // 内部パラメータのxmlファイル名
 	string save_dir; // 各ファイルの保存先ディレクトリ
+	const string imgName = "frame-"; // 入力画像ファイルのprefix
 
 	// 映像 センサファイル名取得
 	char imagefileName[256];
@@ -113,8 +118,8 @@ int main(int argc, char** argv) {
 
 	// 各種アルゴリズムによる特徴点検出および特徴量記述
 	string algorithm_type;
-	//Ptr<Feature2D> feature; // 汎用特徴点抽出および特徴量記述クラスへのポインタ
-	SIFT feature ;//= SURF(hessian,3,4,1,0);
+	Ptr<Feature2D> feature; // 汎用特徴点抽出および特徴量記述クラスへのポインタ
+	//SIFT feature ;//= SURF(hessian,3,4,1,0);
 	int hessian;
 
 	// 対応点の対の格納先
@@ -193,7 +198,8 @@ int main(int argc, char** argv) {
 		// コマンドラインオプションの定義
 		options_description opt("Usage");
 		opt.add_options()("cam", value<std::string>(),"動画名やセンサファイル名が記述されたファイルの指定")
-				("center", value<std::string>(),"センター画像の指定")("start,s", value<int>()->default_value(0),"スタートフレームの指定")
+				("center", value<std::string>(),"センター画像の指定")
+				("start,s", value<int>()->default_value(0),"スタートフレームの指定")
 				("end,e", value<int>()->default_value(INT_MAX),"終了フレームの指定")
 				("comp", value<bool>()->default_value(false),"補完の設定")
 				("inter,i", value<int>()->default_value(9), "取得フレームの間隔")
@@ -378,15 +384,15 @@ int main(int argc, char** argv) {
 		//feature->set("nOctaves", 6);
 		//feature->set("upright", 0);
 	} else if (algorithm_type.compare("SIFT") == 0) {
-		//feature = xfeatures2d::SIFT::create(0,10,0.002,20,2.0);
-		feature = SIFT(0,10,0.02,20,2.0);
+		feature = xfeatures2d::SIFT::create(0,10,0.002,20,2.0);
+		//feature = SIFT(0,10,0.0002,20,2.0);
 		//feature->set("nfeatures", 0);
 		//feature->set("nOctaveLayers", 10);
 		//feature->set("contrastThreshold", 0.02);
 		//feature->set("edgeThreshold", 20);
 		//feature->set("sigma", 2.0);
 	}
-	/*
+/*
 	else if(algorithm_type.compare("AKAZE") == 0){
 		feature = AKAZE::create(AKAZE::DESCRIPTOR_KAZE,0,3,0.0001f,4,4,1);
 	}else if(algorithm_type.compare("KAZE") == 0){
@@ -532,8 +538,8 @@ int main(int argc, char** argv) {
 	//g_feature_detector.detect(gray_image, imageKeypoints);
 
 	// 検出した特徴点の特徴量を記述（sift or surf or akaze）　特徴点検出は行わない (trueの引数)
-	feature(gray_image, Mat(), imageKeypoints, imageDescriptors,false);
-	 //feature.detectAndCompute(gray_image, Mat(), imageKeypoints, imageDescriptors,false);
+	//feature(gray_image, Mat(), imageKeypoints, imageDescriptors,false);
+	 feature->detectAndCompute(gray_image, Mat(), imageKeypoints, imageDescriptors,false);
 
 
 	// 先頭フレームをパノラマ平面へ投影
@@ -661,6 +667,8 @@ int main(int argc, char** argv) {
 					count++;
 			}
 			cout << "edge : " << count << endl;
+			if(blur == 0)
+				f_blur = false;
 			if (count > blur)
 				f_blur = false;
 			count = 0;
@@ -756,8 +764,8 @@ int main(int argc, char** argv) {
 
 			cvtColor(object, gray_image, CV_BGR2GRAY);
 			//g_feature_detector.detect(gray_image, objectKeypoints);
-			//feature->detectAndCompute(gray_image, hough_dst, objectKeypoints,objectDescriptors, false);
-			feature(gray_image, hough_dst, objectKeypoints,objectDescriptors, false);
+			feature->detectAndCompute(gray_image, hough_dst, objectKeypoints,objectDescriptors, false);
+			//feature(gray_image, hough_dst, objectKeypoints,objectDescriptors, false);
 		} else {
 			//	cvtColor(object, gray_image, CV_RGB2GRAY);
 			//	feature->operator ()(gray_image, Mat(), objectKeypoints,
@@ -847,8 +855,8 @@ int main(int argc, char** argv) {
 				// 近いフレームの特徴点抽出を再度実行
 				cvtColor(image, gray_image, CV_BGR2GRAY);
 				//g_feature_detector.detect(gray_image, objectKeypoints);
-				//feature->detectAndCompute(gray_image, Mat(), imageKeypoints,imageDescriptors, false);
-				feature(gray_image, Mat(), imageKeypoints,imageDescriptors, false);
+				feature->detectAndCompute(gray_image, Mat(), imageKeypoints,imageDescriptors, false);
+				//feature(gray_image, Mat(), imageKeypoints,imageDescriptors, false);
 				pano_sds.push_back(obj_sd);
 				vec_n_pano_frames.push_back(frame_num);
 			} else {
@@ -869,16 +877,14 @@ int main(int argc, char** argv) {
 		// 見つかっていない場合は，FRAME_T + a 前のフレームがimageに格納されているはず
 		cvtColor(object, gray_image, CV_BGR2GRAY);
 		//g_feature_detector.detect(gray_image, objectKeypoints);
-		// feature->detectAndCompute(gray_image, Mat(), objectKeypoints,objectDescriptors, false);
+
 		 Mat feature_mask = Mat(gray_image.size(),CV_8UC1,Scalar(255));
 		 Rect rect(0,0,gray_image.cols,400);
 		 Mat white = Mat(feature_mask,rect);
 		 white = Scalar::all(0);
+		 feature->detectAndCompute(gray_image, Mat(), objectKeypoints,objectDescriptors, false);
+		 //feature(gray_image, Mat(), objectKeypoints,objectDescriptors, false);
 
-		 feature(gray_image, feature_mask, objectKeypoints,objectDescriptors, false);
-		 //good_matcher(objectDescriptors, imageDescriptors, &objectKeypoints,&imageKeypoints, &matches, &pt1, &pt2);
-
-		//cout << "selected good_matches : " << pt1.size() << endl;
 
 		/*
 		 // 補完作業
@@ -952,7 +958,7 @@ int main(int argc, char** argv) {
 		//printf("n = %d\n", n);
 	//	printf("num_of_obj = %d\n", pt1.size());
 	//	printf("num_of_img = %d\n", pt2.size());
-//		vector<uchar> state;
+		vector<uchar> state;
 //		if (n >= 4) {
 //			homography = findHomography(Mat(pt1), Mat(pt2), state, RANSAC, 5.0);
 		//} else {
@@ -963,13 +969,13 @@ int main(int argc, char** argv) {
 		vector<detail::ImageFeatures> features;
 		features.clear();
 		detail::ImageFeatures aa;
-		aa.descriptors = imageDescriptors.clone();
+		aa.descriptors = imageDescriptors.getUMat(ACCESS_READ);
 		aa.img_idx = 0;
 		aa.img_size = gray_image.size();
 		aa.keypoints = imageKeypoints;
 		features.push_back(aa);
 
-		aa.descriptors = objectDescriptors.clone();
+		aa.descriptors = objectDescriptors.getUMat(ACCESS_READ);
 		aa.img_idx = 1;
 		aa.img_size = gray_image.size();
 		aa.keypoints = objectKeypoints;
@@ -981,8 +987,9 @@ int main(int argc, char** argv) {
 		homography = rotation_estimater(A1Matrix, A1Matrix, features, estA1,estA2,current_adopt);
 
 
-
-		//homography = findHomography(Mat(pt1),Mat(pt2),CV_RANSAC,5.0);
+		//good_matcher(objectDescriptors, imageDescriptors, &objectKeypoints,&imageKeypoints, &matches, &pt1, &pt2);
+		//cout << "selected good_matches : " << pt1.size() << endl;
+		//homography = findHomography(Mat(pt1),Mat(pt2),CV_RANSAC,5.0,state);
 		// マッチング結果をリサイズして表示
 		Mat result, r_result;
 		//drawMatches(object, objectKeypoints, image, imageKeypoints, current_adopt,result);
@@ -1041,7 +1048,7 @@ int main(int argc, char** argv) {
 		write(cvfs, ss.str(), h_base);
 		ss.clear();
 		ss.str("");
-
+/*
 		ss << "keypoints_" << frame_num;
 		write(cvfs, ss.str(), objectKeypoints);
 		ss.clear();
@@ -1051,7 +1058,7 @@ int main(int argc, char** argv) {
 		write(cvfs, ss.str(), objectDescriptors);
 		ss.clear();
 		ss.str("");
-
+*/
 		ss << save_dir << "pano_src_" << frame_num << ".jpg";
 		imwrite(ss.str(), object);
 		ss.str("");
